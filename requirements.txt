@@ -1,8 +1,5 @@
 argparse
 datetime
-netifaces
-python-tk
-socket
+netifaces-plus
 tk
-tkinter
 tkinterdnd2
