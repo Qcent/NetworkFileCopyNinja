@@ -2,8 +2,12 @@ import socket
 import argparse
 import os
 import struct
+import threading
+import datetime
+from DiscoveryConsts import *
 
 BUFFER_SIZE = 4096
+
 
 def send_file(filename, root_dir, base_dir, host, port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -22,12 +26,14 @@ def send_file(filename, root_dir, base_dir, host, port):
                 s.sendall(chunk)
             print(f'{full_rel_path} sent successfully')
 
+
 def send_directory(directory, host, port):
     base_dir = os.path.basename(directory)
     for root, _, files in os.walk(directory):
         for file in files:
             full_path = os.path.join(root, file)
             send_file(full_path, directory, base_dir, host, port)
+
 
 def receive_files(save_dir, port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -37,7 +43,7 @@ def receive_files(save_dir, port):
         while True:
             conn, addr = s.accept()
             with conn:
-                print(f'Connection from {addr}')
+                #print(f'Connection from {addr}')
                 # Receive the relative path length and relative path first
                 rel_path_length = struct.unpack('I', conn.recv(4))[0]
                 rel_path = conn.recv(rel_path_length).decode('utf-8')
@@ -49,7 +55,34 @@ def receive_files(save_dir, port):
                         if not chunk:
                             break
                         file.write(chunk)
-                    print(f'File received successfully and saved as {file_path}')
+                    print(f'received {rel_path}, from {addr[0]} [{datetime.datetime.now()}]')
+
+
+def listen_for_discovery(port, host_port):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind(('', port))
+    print("Listening for discovery messages...")
+
+    while True:
+        try:
+            data, addr = sock.recvfrom(1024)
+            if data.decode() == DiscoveryCode:
+                response_message = f"{socket.gethostname()}:{host_port}"
+                sock.sendto(response_message.encode(), (addr[0], port+1))
+                print(f"Discovered by: {addr} [{datetime.datetime.now()}]")
+        except ConnectionResetError as e:
+            # normally triggers after broadcast ends
+            continue
+        except Exception as e:
+            print(f"Error: {e}")
+            continue
+
+
+def start_discovery_listener(host_port, discovery_port=DiscoveryPort):
+    discovery_thread = threading.Thread(target=listen_for_discovery, args=(discovery_port, host_port))
+    discovery_thread.daemon = True
+    discovery_thread.start()
+
 
 def main():
     parser = argparse.ArgumentParser(description='File Transfer Program')
@@ -74,7 +107,9 @@ def main():
     elif args.mode == 'receive':
         if not args.savedir:
             parser.error('receive mode requires --savedir')
+        start_discovery_listener(args.port, DiscoveryPort)
         receive_files(args.savedir, args.port)
+
 
 if __name__ == '__main__':
     main()
