@@ -5,6 +5,7 @@ import struct
 import threading
 import datetime
 import time
+import select
 
 from DiscoveryConsts import *
 
@@ -16,20 +17,42 @@ SENT_DATA = {
     "canceled": False
              }
 
+RECV_DATA = {
+    "received_files": 0,
+    "rejected_files": 0,
+    "failed_files": 0,
+    "data_received": 0,
+    "overwrite": False,
+    "canceled": False
+}
+
 def send_file(filename, root_dir, base_dir, host, port):
     def failed_to_send():
         SENT_DATA["failed_files"] += 1
         SENT_DATA["processed_files"] += 1
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.connect((host, port))
+        try:
+            s.connect((host, port))
+        except Exception as e:
+            print(f'[{datetime.datetime.now()}] Error sending {filename}: Could not establish connection')
+            failed_to_send()
+            return 0
+
         # Construct the relative path to maintain directory structure
         rel_path = os.path.relpath(filename, root_dir)
         full_rel_path = os.path.join(base_dir, rel_path)
+
         # Send the relative path length and relative path first
         rel_path_bytes = full_rel_path.encode('utf-8')
-        s.send(struct.pack('I', len(rel_path_bytes)))
-        s.send(rel_path_bytes)
+        try:
+            s.send(struct.pack('I', len(rel_path_bytes)))
+            s.send(rel_path_bytes)
+        except Exception as e:
+            print(f'[{datetime.datetime.now()}] Error sending {filename}: Conection lost')
+            failed_to_send()
+            return 0
+
         # Send the file content
         with open(filename, 'rb') as file:
             print(f'[{datetime.datetime.now()}] Sending {full_rel_path} to {host}:{port}')
@@ -65,37 +88,56 @@ def send_directory(directory, host, port):
 
 
 def receive_files(save_dir, port, overwrite=False):
+    RECV_DATA["overwrite"] = overwrite
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(('0.0.0.0', port))
         s.listen()
         print(f'Listening for incoming connections on port {port}')
+
         while True:
-            conn, addr = s.accept()
-            file_exists = False
-            with conn:
-                #print(f'Connection from {addr}')
-                # Receive the relative path length and relative path first
-                rel_path_length = struct.unpack('I', conn.recv(4))[0]
-                rel_path = conn.recv(rel_path_length).decode('utf-8')
-                file_path = os.path.join(save_dir, rel_path)
-                os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            if RECV_DATA["canceled"]:
+                return
 
-                if os.path.exists(file_path):
-                    file_exists = True
-                    if not overwrite:
-                        print(f'File {rel_path} already exists and will not be overwritten.')
-                        conn.close()
-                        continue
+            readable, _, _ = select.select([s], [], [], 1)  # 1 second timeout
+            if s in readable:
+                conn, addr = s.accept()
+                file_exists = False
+                with conn:
+                    rel_path_length = struct.unpack('I', conn.recv(4))[0]
+                    rel_path = conn.recv(rel_path_length).decode('utf-8')
+                    file_path = os.path.join(save_dir, rel_path)
+                    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+                    print(f'Incoming file {rel_path} from {addr[0]}  [{datetime.datetime.now()}]')
 
-                statement = "Overwrote" if file_exists else "Received"
+                    if os.path.exists(file_path):
+                        file_exists = True
+                        if not RECV_DATA["overwrite"]:
+                            print(f'File {rel_path} already exists and will not be overwritten.')
+                            RECV_DATA["rejected_files"] += 1
+                            conn.close()
+                            continue
 
-                # Receive the file content
-                with open(file_path, 'wb') as file:
-                    while chunk := conn.recv(BUFFER_SIZE):
-                        if not chunk:
-                            break
-                        file.write(chunk)
-                    print(f'{statement} {rel_path}, from {addr[0]} [{datetime.datetime.now()}]')
+                    statement = "Overwrote" if file_exists else "Received"
+
+                    with open(file_path, 'wb') as file:
+                        try:
+                            while chunk := conn.recv(BUFFER_SIZE):
+                                if RECV_DATA["canceled"]:
+                                    print("Cancellation requested during file transfer, stopping receive_files.")
+                                    RECV_DATA["failed_files"] += 1
+                                    conn.close()
+                                    return 0
+                                if not chunk:
+                                    break
+                                file.write(chunk)
+                                RECV_DATA["data_received"] += len(chunk)
+                            print(f'{statement} {rel_path}  [{datetime.datetime.now()}]')
+                            RECV_DATA["received_files"] += 1
+                        except Exception as e:
+                            print(f'[{datetime.datetime.now()}] Error receiving {filename}: Conection lost')
+                            RECV_DATA["failed_files"] += 1
+                            return 0
+
 
 
 def listen_for_discovery(port, host_port):
@@ -109,7 +151,7 @@ def listen_for_discovery(port, host_port):
             if data.decode() == DiscoveryCode:
                 response_message = f"{socket.gethostname()}:{host_port}"
                 sock.sendto(response_message.encode(), (addr[0], port+1))
-                print(f"Discovered by: {addr} [{datetime.datetime.now()}]")
+                print(f"Discovered by: {addr}  [{datetime.datetime.now()}]")
         except ConnectionResetError as e:
             # normally triggers after broadcast ends
             continue
