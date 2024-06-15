@@ -9,6 +9,7 @@ NetworkFileCopyNinja is a Python-based tool designed to simplify file transfer b
 - [Usage](#usage)
   - [Tool 1: Command-Line File Sender and Receiver](#tool-1-command-line-file-sender-and-receiver)
   - [Tool 2: File Transfer GUI](#tool-2-file-transfer-gui)
+  - [Tool 3: File Receiver GUI](#tool-3-file-receiver-gui)
 - [Requirements](#requirements)
 - [Screenshots](#screenshots)
 - [Contributing](#contributing)
@@ -29,11 +30,14 @@ NetworkFileCopyNinja is a Python-based tool designed to simplify file transfer b
    - Enables browsing files/directories, drag-and-drop functionality, and sending selected items to discovered network hosts.
    - Displays transfer status, including successful transfers and any failed attempts.
 
-5. **Dynamic Host Discovery**
+5. **Tool 3: File Receiver GUI**
+   - GUI for receiving files over a network connection.
+   - Allows users to select a save directory, toggle overwrite settings, and view received file statistics in real-time.
+   - Integrates logging functionality to log received file information and events (`receiver.log`).
+
+6. **Dynamic Host Discovery**
    - Automatically discovers and lists available network hosts.
    - Allows users to select hosts from a list for seamless file transfer.
-
-
 
 ## Installation
 
@@ -50,17 +54,6 @@ pip install -r requirements.txt
 ### Tool 1: File Sender and Receiver
 
 The File Sender and Receiver tool allows you to send and receive files or directories over a network.
-
-#### Requirements
-
-- Ensure Python is installed on your system.
-- Install the required dependencies listed in `requirements.txt`.
-
-## Usage
-
-### Tool 1: Command-Line File Sender and Receiver
-
-The Command-Line File Sender and Receiver tool allows you to send and receive files or directories over a network using simple command-line commands.
 
 #### Requirements
 
@@ -89,7 +82,6 @@ The Command-Line File Sender and Receiver tool allows you to send and receive fi
     python file_transfer.py send --dir /home/user/documents --host 192.168.1.2 --port 5001
     ```
 
-
 2. **Receiving Files:**
 
     To receive files, use the `receive` mode. You need to specify the port to listen on and the directory to save the received files.
@@ -103,7 +95,6 @@ The Command-Line File Sender and Receiver tool allows you to send and receive fi
     ```bash
     python file_transfer.py receive --savedir /home/user/downloads --port 5001
     ```
-
 
 ### Tool 2: File Transfer GUI
 
@@ -152,6 +143,43 @@ The File Transfer GUI provides a graphical interface for sending files or direct
     - **Clear Files:** Click the "Clear" button to remove all selected files from the list.
     - **Send Files:** Click the "Send" button to transfer the selected files or directories to the specified host and port.
 
+### Tool 3: File Receiver GUI
+
+The File Receiver GUI (`file_receiver_gui.py`) allows users to receive files over a network connection. It provides a graphical interface to manage file reception settings, view received file statistics, and interact with the received file log.
+
+#### Requirements
+
+- Ensure Python is installed on your system.
+- Install the required dependencies listed in `requirements.txt`.
+
+#### Usage
+
+1. **Launching the GUI:**
+
+    ```bash
+    python file_receiver_gui.py --savedir <save_directory> --port <port> --overwrite
+    ```
+
+    Example:
+
+    ```bash
+    python file_receiver_gui.py --savedir /home/user/downloads --port 5001 --overwrite
+    ```
+
+    ![File Receiver GUI Screenshot](path/to/your/screenshot3.png)
+
+2. **Choosing Save Directory:**
+
+    - Click the "Choose Save Folder" button to select the directory where received files will be saved.
+
+3. **Overwrite Option:**
+
+    - Toggle the "Overwrite" checkbox to enable/disable overwriting existing files during file reception.
+
+4. **Viewing File Statistics:**
+
+    - Real-time updates on received files, failed files, rejected files, and total data received are displayed in the GUI.
+
 ## Requirements
 
 - Python 3.x
@@ -166,3 +194,4 @@ We welcome contributions to improve NetworkFileCopyNinja! Please fork the reposi
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
