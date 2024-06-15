@@ -15,7 +15,7 @@ SENT_DATA = {
     "failed_files": 0,
     "processed_files": 0,
     "canceled": False
-             }
+    }
 
 RECV_DATA = {
     "received_files": 0,
@@ -23,8 +23,9 @@ RECV_DATA = {
     "failed_files": 0,
     "data_received": 0,
     "overwrite": False,
+    "in_progress": False,
     "canceled": False
-}
+    }
 
 def send_file(filename, root_dir, base_dir, host, port):
     def failed_to_send():
@@ -97,7 +98,6 @@ def receive_files(save_dir, port, overwrite=False):
         while True:
             if RECV_DATA["canceled"]:
                 return
-
             readable, _, _ = select.select([s], [], [], 1)  # 1 second timeout
             if s in readable:
                 conn, addr = s.accept()
@@ -107,12 +107,13 @@ def receive_files(save_dir, port, overwrite=False):
                     rel_path = conn.recv(rel_path_length).decode('utf-8')
                     file_path = os.path.join(save_dir, rel_path)
                     os.makedirs(os.path.dirname(file_path), exist_ok=True)
-                    print(f'Incoming file {rel_path} from {addr[0]}  [{datetime.datetime.now()}]')
+                    print(f'[{datetime.datetime.now()}]  Incoming file: {rel_path} from {addr[0]}')
+                    RECV_DATA["in_progress"] = True
 
                     if os.path.exists(file_path):
                         file_exists = True
                         if not RECV_DATA["overwrite"]:
-                            print(f'File {rel_path} already exists and will not be overwritten.')
+                            print(f'\tFile {rel_path} already exists and will not be overwritten.')
                             RECV_DATA["rejected_files"] += 1
                             conn.close()
                             continue
@@ -123,20 +124,22 @@ def receive_files(save_dir, port, overwrite=False):
                         try:
                             while chunk := conn.recv(BUFFER_SIZE):
                                 if RECV_DATA["canceled"]:
-                                    print("Cancellation requested during file transfer, stopping receive_files.")
+                                    print(f"[{datetime.datetime.now()}]  Cancellation requested during file transfer, stopping receive_files.")
                                     RECV_DATA["failed_files"] += 1
+                                    RECV_DATA["in_progress"] = False
                                     conn.close()
                                     return 0
                                 if not chunk:
                                     break
                                 file.write(chunk)
                                 RECV_DATA["data_received"] += len(chunk)
-                            print(f'{statement} {rel_path}  [{datetime.datetime.now()}]')
+                            print(f'[{datetime.datetime.now()}]  {statement} {rel_path}')
                             RECV_DATA["received_files"] += 1
                         except Exception as e:
                             print(f'[{datetime.datetime.now()}] Error receiving {filename}: Conection lost')
                             RECV_DATA["failed_files"] += 1
-                            return 0
+                            continue
+            RECV_DATA["in_progress"] = False
 
 
 

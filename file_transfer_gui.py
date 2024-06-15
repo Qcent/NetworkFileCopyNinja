@@ -197,6 +197,8 @@ class FileTransferGUI(TkinterDnD.Tk):
         base_dir = os.path.basename(directory)
         for root, _, files in os.walk(directory):
             for file in files:
+                if SENT_DATA["canceled"]:
+                    return False
                 full_path = os.path.join(root, file)
                 if not send_file(full_path, directory, base_dir, self.host, self.port):
                     success = False
@@ -233,6 +235,8 @@ class FileTransferGUI(TkinterDnD.Tk):
         unit_index = 0
         if size is None:
             size = self.total_file_size
+        if not size:
+            return f"0 {units[unit_index]}"
 
         while size >= 1024 and unit_index < len(units) - 1:
             size /= 1024

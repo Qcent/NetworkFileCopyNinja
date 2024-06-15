@@ -5,6 +5,17 @@ from threading import Thread
 from fileTransfer import SENT_DATA
 
 
+def report_data_size(size):
+    units = ['bytes', 'kB', 'MB']
+    unit_index = 0
+    if size == 0:
+        return f"0 {units[unit_index]}"
+    while size >= 1024 and unit_index < len(units) - 1:
+        size /= 1024
+        unit_index += 1
+    return f"{size:.2f} {units[unit_index]}"
+
+
 class ProgressDialog(tk.Toplevel):
     def __init__(self, parent, filepaths, totalcount, totalsize, host, port, send_file, send_dir):
         super().__init__(parent)
@@ -28,11 +39,15 @@ class ProgressDialog(tk.Toplevel):
         self.progressbar = ttk.Progressbar(self, orient="horizontal", length=200, mode="determinate")
         self.progressbar.pack(pady=10, padx=40)
 
-        self.bytes_label = tk.Label(self, text="Bytes Sent: 0")
-        self.bytes_label.pack()
+        # Frame to contain the Browse and Clear buttons
+        self.stats_frame = tk.Frame(self)
+        self.stats_frame.pack(fill=tk.X, padx=20, pady=3)
 
-        self.total_bytes_label = tk.Label(self, text="Total Bytes: Calculating...")
-        self.total_bytes_label.pack()
+        self.files_label = tk.Label(self.stats_frame, text=f"files: {SENT_DATA['processed_files']}/{self.filecount}")
+        self.files_label.pack(side=tk.LEFT)
+
+        self.data_label = tk.Label(self.stats_frame, text=f"{report_data_size(SENT_DATA['bytesSent'])} / {report_data_size(self.totalsize)}")
+        self.data_label.pack(side=tk.RIGHT)
 
         self.cancel_button = tk.Button(self, text="Cancel", command=self.cancel_transfer)
         self.cancel_button.pack(pady=10)
@@ -43,19 +58,19 @@ class ProgressDialog(tk.Toplevel):
         self.update_progress()
 
     def update_progress(self):
-        if SENT_DATA["processed_files"]:
-            self.prog_metric1 = (SENT_DATA["processed_files"] / self.filecount) * 100
-        if SENT_DATA["bytesSent"]:
-            self.prog_metric2 = (SENT_DATA["bytesSent"] / self.totalsize) * 100
+        #if SENT_DATA["processed_files"]:
+        self.prog_metric1 = (SENT_DATA["processed_files"] / (self.filecount-1)) * 100
+        #if SENT_DATA["bytesSent"]:
+        self.prog_metric2 = (SENT_DATA["bytesSent"] / self.totalsize) * 100
 
-        self.progress = max(self.prog_metric1, self.prog_metric2)
+        self.progress = (self.prog_metric1 + self.prog_metric2)/2  # max(self.prog_metric1, self.prog_metric2)
 
         self.progressbar["value"] = self.progress
-        self.bytes_label["text"] = f"Bytes Sent: {SENT_DATA['bytesSent']}"
+        self.files_label["text"] = f"files: {SENT_DATA['processed_files']}/{self.filecount}"
+        self.data_label["text"] = f"{report_data_size(SENT_DATA['bytesSent'])} / {report_data_size(self.totalsize)}"
         self.after(100, self.update_progress)
 
     def perform_transfer(self):
-        self.total_bytes_label["text"] = f"Total Bytes: {self.totalsize}"
         failed_files = []
         # Send the list of files
         for path in self.filepaths:
@@ -79,3 +94,4 @@ class ProgressDialog(tk.Toplevel):
     def cancel_transfer(self):
         self.cancelled = True
         SENT_DATA["canceled"] = True
+        SENT_DATA["failed_files"] += self.filecount - (SENT_DATA["processed_files"] + 1)

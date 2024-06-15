@@ -4,6 +4,7 @@ from tkinter import filedialog, messagebox
 import argparse
 import os
 import datetime
+import time
 
 from DiscoveryConsts import DiscoveryPort
 from stdoutputCapture import StdOutputCaptureThread
@@ -80,7 +81,9 @@ class FileReceiverGUI(tk.Tk):
         self.log_file = log_file
 
         self.title(APP_TITLE)
-        self.geometry("700x350")
+        self.geometry("760x350")
+        self.auto_updater_running = False
+        self.auto_updater_thread = None
 
         # Set protocol handler for window close event
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -188,6 +191,21 @@ class FileReceiverGUI(tk.Tk):
     def update_stats_label(self):
         self.stats_text.config(text=f"{RECV_DATA['received_files']} files received, {RECV_DATA['failed_files']} failed, {RECV_DATA['rejected_files']} rejected\n{self.report_total_file_size(RECV_DATA['data_received'])} received")
 
+    def auto_updater(self):
+        if not RECV_DATA["in_progress"]:
+            self.update_stats_label()  # update the stats just to be safe / avoid race conditions
+            # self.auto_updater_running = False
+            return
+
+        if not self.auto_updater_running:
+            self.auto_updater_running = True
+
+            while RECV_DATA["in_progress"]:
+                self.update_stats_label()
+                time.sleep(.3)
+
+            self.auto_updater_running = False
+
     def add_text(self, text):
         # Add text to the text area
         self.text_area.config(state=tk.NORMAL)
@@ -202,7 +220,8 @@ class FileReceiverGUI(tk.Tk):
         self.text_area.config(state=tk.DISABLED)
         self.text_area.see(tk.END)  # Scroll to the bottom
 
-        self.update_stats_label()
+        self.auto_updater_thread = threading.Thread(target=self.auto_updater)
+        self.auto_updater_thread.start()
 
         if self.log_file:
             self.log_file.write(f"{text}\n")
@@ -221,7 +240,6 @@ class FileReceiverGUI(tk.Tk):
         return f"{size:.2f} {units[unit_index]}"
 
     def on_closing(self):
-        #RECV_DATA["canceled"] = True
         save_settings(self.savedir, self.port, RECV_DATA["overwrite"])
         self.destroy()
 
@@ -246,7 +264,7 @@ def main():
     if not args.port:
         args.port = int(saved_port) if saved_port else 1111
     if not args.overwrite:
-        args.overwrite = saved_overwrite
+        args.overwrite = saved_overwrite if saved_overwrite else False
 
     app = FileReceiverGUI(args.savedir, args.port, args.overwrite, log_file)
 
