@@ -17,6 +17,10 @@ SelectedHost = {
 }
 
 
+def is_logging():
+    return 0    # set this to enable/disable logging
+
+
 class HostListPopup(tk.Toplevel):
     def __init__(self, parent, host_list):
         super().__init__(parent)
@@ -237,16 +241,15 @@ class FileTransferGUI(TkinterDnD.Tk):
 
 
 def main():
-    '''
-    # Open a log file in append mode
-    log_file = open("send.log", "a")
+    if is_logging():
+        # Open a log file in append mode
+        log_file = open("send.log", "a")
 
-    # Redirect stdout and stderr to the log file
-    sys.stdout = log_file
-    sys.stderr = log_file
+        # Redirect stdout and stderr to the log file
+        sys.stdout = log_file
+        sys.stderr = log_file
 
-    print(f'[{datetime.datetime.now()}] <<< NEW SESSION >>>')
-    '''
+        print(f'[{datetime.datetime.now()}] <<< NEW SESSION >>>')
 
     parser = argparse.ArgumentParser(description=APP_TITLE)
     parser.add_argument("--host", help="Host to connect to")
@@ -270,7 +273,8 @@ def main():
 
     app.mainloop()
 
-    #log_file.close()
+    if is_logging():
+        log_file.close()
 
 
 if __name__ == "__main__":
