@@ -14,12 +14,26 @@ NetworkFileCopyNinja is a Python-based tool designed to simplify file transfer b
 - [Contributing](#contributing)
 - [License](#license)
 
-## Features
+### Features
 
-- Easy file transfer across Windows, macOS, and Linux.
-- Supports both file and directory transfer.
-- Maintains directory structure during transfer.
-- Reliable performance even when traditional methods fail.
+1. **Cross-Platform File Transfer**: Simplify file transfer between Windows, macOS, and Linux systems on a network.
+   
+2. **Robust Transfer Mechanism**: Uses a reliable socket-based transfer when traditional protocols like SMB, FTP, or others fail to deliver.
+
+3. **Tool 1: Command-line Interface (CLI)**
+   - Allows sending files or directories via command-line arguments.
+   - Supports specifying host IP, port, and file/directory paths directly from the terminal.
+
+4. **Tool 2: File Transfer GUI**
+   - Interactive graphical user interface (GUI) built with Tkinter.
+   - Enables browsing files/directories, drag-and-drop functionality, and sending selected items to discovered network hosts.
+   - Displays transfer status, including successful transfers and any failed attempts.
+
+5. **Dynamic Host Discovery**
+   - Automatically discovers and lists available network hosts.
+   - Allows users to select hosts from a list for seamless file transfer.
+
+
 
 ## Installation
 
@@ -109,7 +123,7 @@ The File Transfer GUI provides a graphical interface for sending files or direct
 
 1. **Launching the GUI:**
 
-    To launch the GUI, you need to specify the host and port to connect to.
+    To launch the GUI, specify the host and port to connect to.
 
     ```bash
     python file_transfer_gui.py --host <receiver_host> --port <port>
@@ -123,7 +137,15 @@ The File Transfer GUI provides a graphical interface for sending files or direct
 
     ![File Transfer GUI Screenshot](path/to/your/screenshot1.png)
 
-2. **Using the GUI:**
+2. **Discovering Hosts:**
+
+    - Click the **Search Hosts** button located within the GUI.
+    - A popup window will appear listing discovered hosts on the network.
+    - Double-click on a host to select it for file transfer.
+  
+    ![Discover Hosts Popup](path/to/your/screenshot2.png)
+
+3. **Using the GUI:**
 
     - **Browse Files:** Click the "Browse" button to select files or directories to send.
     - **Drag and Drop:** Drag and drop files or directories into the specified area.
