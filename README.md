@@ -11,7 +11,6 @@ NetworkFileCopyNinja is a Python-based tool designed to simplify file transfer b
   - [Tool 1: Command-Line File Sender and Receiver](#tool-1-command-line-file-sender-and-receiver)
   - [Tool 2: File Transfer GUI](#tool-2-file-transfer-gui)
   - [Tool 3: File Receiver GUI](#tool-3-file-receiver-gui)
-- [Screenshots](#screenshots)
 - [Contributing](#contributing)
 - [License](#license)
 
