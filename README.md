@@ -29,6 +29,8 @@ To get started with NetworkFileCopyNinja, clone the repository and install the r
 git clone https://github.com/yourusername/NetworkFileCopyNinja.git
 cd NetworkFileCopyNinja
 pip install -r requirements.txt
+```
+
 ## Usage
 
 ### Tool 1: File Sender and Receiver
