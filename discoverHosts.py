@@ -5,7 +5,7 @@ import threading
 from DiscoveryConsts import *
 from netInterfaces import GetNetInfo
 
-DEFAULT_TIMEOUT = 2.5
+DEFAULT_TIMEOUT = 2
 
 
 def get_broadcast_address(ip, subnet_mask):

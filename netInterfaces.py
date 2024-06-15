@@ -1,5 +1,6 @@
 import netifaces as ni
 
+
 def get_ip_and_subnet(interface):
     try:
         # Get the IP address
@@ -10,13 +11,16 @@ def get_ip_and_subnet(interface):
     except KeyError:
         return None, None
 
+
 def get_default_interface():
     gws = ni.gateways()
     default_interface = gws['default'][ni.AF_INET][1]
     return default_interface
 
+
 def GetNetInfo():
     return get_ip_and_subnet(get_default_interface())
+
 
 if __name__ == "__main__":
     default_interface = get_default_interface()

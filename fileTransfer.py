@@ -142,7 +142,6 @@ def receive_files(save_dir, port, overwrite=False):
             RECV_DATA["in_progress"] = False
 
 
-
 def listen_for_discovery(port, host_port):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind(('', port))

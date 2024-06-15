@@ -184,8 +184,11 @@ The File Receiver GUI (`file_receiver_gui.py`) allows users to receive files ove
 
 - Python 3.x
 - Required dependencies listed in `requirements.txt`
-- Additional dependency for GUI:
+- Additional dependency modules:
+    - `tkinter` Python's standard GUI (Graphical User Interface) toolkit.
     - `tkinterdnd2` (for drag-and-drop functionality)
+    - `netifaces` or `netifaces-plus` (Assists network host discovery)
+
 
 ## Contributing
 

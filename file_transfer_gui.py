@@ -40,7 +40,7 @@ class HostListPopup(tk.Toplevel):
         for host in self.host_list:
             self.listbox.insert(tk.END, f"  {host[0]}   :   {host[1]}   :   {host[2]}")
 
-        # Bind double click event to set title
+        # Bind double click event to select host
         self.listbox.bind("<Double-Button-1>", self.select_host)
 
     def select_host(self, event):
@@ -66,14 +66,10 @@ class FileTransferGUI(TkinterDnD.Tk):
         else:
             self.title(f"{APP_TITLE} --> {host}")
 
-        if sys.platform.startswith('win'):
-            # Windows
+        if sys.platform.startswith('win'):  # Windows
             self.geometry("420x505")
-            self.pyCommand = "python"
-        elif sys.platform.startswith('darwin'):
-            # Mac OS
+        elif sys.platform.startswith('darwin'):  # Mac OS
             self.geometry("420x550")
-            self.pyCommand = "python3"
 
         self.failed_files = []  # List to store paths of failed files
         self.create_widgets()
@@ -158,19 +154,6 @@ class FileTransferGUI(TkinterDnD.Tk):
         tranferWindow.wait_window()
 
         self.failed_files = tranferWindow.failed_files
-
-        '''
-        # Send the list of files
-        for path in selected_files:
-            if path.startswith("❌"):  # Check if path starts with ❌ (previously failed to send)
-                path = path[1:]  # Remove ❌ from path
-            if os.path.isdir(path):
-                if not self.transfer_directory(path):
-                    self.failed_files.append(path)  # Add failed directory to list
-            else:
-                if not self.transfer_file(path):
-                    self.failed_files.append(path)  # Add failed file to list   
-        '''
 
         # Update info label
         num_fails = SENT_DATA["failed_files"]
