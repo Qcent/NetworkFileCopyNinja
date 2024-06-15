@@ -3,10 +3,12 @@ from tkinter import filedialog, messagebox
 import argparse
 import os
 import sys
+import datetime
 from tkinterdnd2 import DND_FILES, TkinterDnD
 
 from discoverHosts import discover_and_list_hosts
 from fileTransfer import SENT_DATA, send_file
+from progressDialog import ProgressDialog
 
 APP_TITLE = "File Transfer GUI"
 SelectedHost = {
@@ -127,12 +129,16 @@ class FileTransferGUI(TkinterDnD.Tk):
 
     def send_files(self):
         global SelectedHost
-        SENT_DATA['bytesSent'] = 0
-        SENT_DATA['failed_files'] = 0
         if SelectedHost['ip'] and self.host is not SelectedHost['ip']:
             self.host = SelectedHost['ip']
         if SelectedHost['port'] and self.port is not int(SelectedHost['port']):
             self.port = int(SelectedHost['port'])
+
+        # Reset all SEND_DATA
+        SENT_DATA['bytesSent'] = 0
+        SENT_DATA['failed_files'] = 0
+        SENT_DATA['processed_files'] = 0
+        SENT_DATA["canceled"] = False
 
         selected_files = self.file_listbox.get(0, tk.END)
 
@@ -143,6 +149,13 @@ class FileTransferGUI(TkinterDnD.Tk):
         num_items = self.total_file_count
         self.failed_files.clear()
 
+        tranferWindow = ProgressDialog(None, selected_files, self.total_file_count, self.total_file_size, self.host, self.port, self.transfer_file, self.transfer_directory)
+        tranferWindow.grab_set()  # Make the popup modal
+        tranferWindow.wait_window()
+
+        self.failed_files = tranferWindow.failed_files
+
+        '''
         # Send the list of files
         for path in selected_files:
             if path.startswith("❌"):  # Check if path starts with ❌ (previously failed to send)
@@ -152,7 +165,8 @@ class FileTransferGUI(TkinterDnD.Tk):
                     self.failed_files.append(path)  # Add failed directory to list
             else:
                 if not self.transfer_file(path):
-                    self.failed_files.append(path)  # Add failed file to list
+                    self.failed_files.append(path)  # Add failed file to list   
+        '''
 
         # Update info label
         num_fails = SENT_DATA["failed_files"]
@@ -223,6 +237,17 @@ class FileTransferGUI(TkinterDnD.Tk):
 
 
 def main():
+    '''
+    # Open a log file in append mode
+    log_file = open("send.log", "a")
+
+    # Redirect stdout and stderr to the log file
+    sys.stdout = log_file
+    sys.stderr = log_file
+
+    print(f'[{datetime.datetime.now()}] <<< NEW SESSION >>>')
+    '''
+
     parser = argparse.ArgumentParser(description=APP_TITLE)
     parser.add_argument("--host", help="Host to connect to")
     parser.add_argument("--port", type=int, help="Port to connect to")
@@ -244,6 +269,8 @@ def main():
     button.pack(side=tk.TOP, padx=(10, 0))
 
     app.mainloop()
+
+    #log_file.close()
 
 
 if __name__ == "__main__":

@@ -4,15 +4,23 @@ import os
 import struct
 import threading
 import datetime
+import time
+
 from DiscoveryConsts import *
 
 BUFFER_SIZE = 4096
 SENT_DATA = {
     "bytesSent": 0,
-    "failed_files": 0
+    "failed_files": 0,
+    "processed_files": 0,
+    "canceled": False
              }
 
 def send_file(filename, root_dir, base_dir, host, port):
+    def failed_to_send():
+        SENT_DATA["failed_files"] += 1
+        SENT_DATA["processed_files"] += 1
+
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.connect((host, port))
         # Construct the relative path to maintain directory structure
@@ -24,16 +32,24 @@ def send_file(filename, root_dir, base_dir, host, port):
         s.send(rel_path_bytes)
         # Send the file content
         with open(filename, 'rb') as file:
-            print(f'Sending {full_rel_path} to {host}:{port}')
+            print(f'[{datetime.datetime.now()}] Sending {full_rel_path} to {host}:{port}')
             while chunk := file.read(BUFFER_SIZE):
+                if SENT_DATA["canceled"]:
+                    print(f'[{datetime.datetime.now()}] User canceled transfer')
+                    failed_to_send()
+                    return 0
+
                 try:
                     s.sendall(chunk)
                     SENT_DATA["bytesSent"] += len(chunk)
+
                 except Exception as e:
                     print(f'Error sending {filename}: File may already exist on host machine')
-                    SENT_DATA["failed_files"] += 1
+                    failed_to_send()
                     return 0
-        print(f'{full_rel_path} sent successfully')
+
+        print(f'[{datetime.datetime.now()}] {full_rel_path} sent successfully')
+        SENT_DATA["processed_files"] += 1
         return 1
 
 
