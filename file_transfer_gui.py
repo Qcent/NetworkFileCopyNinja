@@ -3,15 +3,15 @@ from tkinter import filedialog, messagebox
 import argparse
 import os
 import sys
-import subprocess
 from tkinterdnd2 import DND_FILES, TkinterDnD
 
 from discoverHosts import discover_and_list_hosts
+from fileTransfer import SENT_DATA, send_file
 
 APP_TITLE = "File Transfer GUI"
 SelectedHost = {
     "port": None,
-    "ip": None
+    "ip": None,
 }
 
 
@@ -52,6 +52,8 @@ class FileTransferGUI(TkinterDnD.Tk):
         super().__init__()
         self.host = host
         self.port = port
+        self.total_file_size = 0
+        self.total_file_count = 0
 
         if not host:
             self.title(APP_TITLE)
@@ -94,7 +96,7 @@ class FileTransferGUI(TkinterDnD.Tk):
         self.file_listbox.pack(fill=tk.BOTH, expand=True, padx=5, pady=(0,0))
 
         # Label
-        self.label_text = tk.Label(self, text="0 items\n ", width=30, height=2, justify=tk.LEFT, anchor="w", font=("Helvetica", 10, "bold"))
+        self.label_text = tk.Label(self, text="0 files\n ", width=30, height=2, justify=tk.LEFT, anchor="w", font=("Helvetica", 10, "bold"))
         self.label_text.pack(side=tk.LEFT, padx=(10, 0), pady=0)
 
         # Send button
@@ -106,21 +108,31 @@ class FileTransferGUI(TkinterDnD.Tk):
         for filepath in filepaths:
             if filepath not in self.file_listbox.get(0, tk.END):
                 self.file_listbox.insert(tk.END, filepath)
+                self.total_file_size += self.get_file_size(filepath)
         self.update_items_label()
 
     def drop(self, event):
         filepaths = self.tk.splitlist(event.data)
         for filepath in filepaths:
-            if filepath not in self.file_listbox.get(0, tk.END):
+            filepath_fail = f"❌{filepath}"
+            if (filepath not in self.file_listbox.get(0, tk.END) and
+                    filepath_fail not in self.file_listbox.get(0, tk.END)):
                 self.file_listbox.insert(tk.END, filepath)
+                self.total_file_size += self.get_file_size(filepath)
         self.update_items_label()
+
+    def failed_file_redrop(self, filepath):
+        self.file_listbox.insert(tk.END, f"❌{filepath}")
+        self.total_file_size += self.get_file_size(filepath)
 
     def send_files(self):
         global SelectedHost
+        SENT_DATA['bytesSent'] = 0
+        SENT_DATA['failed_files'] = 0
         if SelectedHost['ip'] and self.host is not SelectedHost['ip']:
             self.host = SelectedHost['ip']
-        if SelectedHost['port'] and self.port is not SelectedHost['port']:
-            self.port = SelectedHost['port']
+        if SelectedHost['port'] and self.port is not int(SelectedHost['port']):
+            self.port = int(SelectedHost['port'])
 
         selected_files = self.file_listbox.get(0, tk.END)
 
@@ -128,12 +140,13 @@ class FileTransferGUI(TkinterDnD.Tk):
             messagebox.showerror("Error", "No files or directories selected")
             return
 
-        num_items = self.file_listbox.size()
-        self.failed_files.clear()  # Clear the list of failed files
+        num_items = self.total_file_count
+        self.failed_files.clear()
 
+        # Send the list of files
         for path in selected_files:
             if path.startswith("❌"):  # Check if path starts with ❌ (previously failed to send)
-                path = path[1:]  # Remove ❌
+                path = path[1:]  # Remove ❌ from path
             if os.path.isdir(path):
                 if not self.transfer_directory(path):
                     self.failed_files.append(path)  # Add failed directory to list
@@ -141,38 +154,72 @@ class FileTransferGUI(TkinterDnD.Tk):
                 if not self.transfer_file(path):
                     self.failed_files.append(path)  # Add failed file to list
 
+        # Update info label
+        num_fails = SENT_DATA["failed_files"]
+        num_success = num_items - num_fails
+        if num_fails:
+            self.label_text.config(text=f"Failed to send {num_fails} files ({self.report_total_file_size(self.total_file_size-SENT_DATA['bytesSent'])})\nSuccessfully sent {num_success} files ({self.report_total_file_size(SENT_DATA['bytesSent'])})")
+        else:
+            self.label_text.config(text=f"Successfully sent {num_success} files ({self.report_total_file_size(SENT_DATA['bytesSent'])})\n ")
+
         # Clear the listbox after sending files
         self.file_listbox.delete(0, tk.END)
+        self.total_file_size = 0
+        self.total_file_count = 0
 
         # Add failed files to listbox
         for path in self.failed_files:
-            self.file_listbox.insert(tk.END, f"❌{path}")
-
-        # Update info label
-        num_fails = len(self.failed_files)
-        num_success = num_items - num_fails
-        if num_fails:
-            self.label_text.config(text=f"Failed to send {num_fails} items\nSuccessfully sent {num_success} items")
-        else:
-            self.label_text.config(text=f"Successfully sent {num_success} items\n ")
+            self.failed_file_redrop(path)
 
     def transfer_file(self, filepath):
-        command = [self.pyCommand, "fileTransfer.py", "send", "--files", filepath, "--host", self.host, "--port", str(self.port)]
-        result = subprocess.run(command)
-        return result.returncode == 0  # Check if command was successful
+        return send_file(filepath, os.path.dirname(filepath), '', self.host, self.port)
 
     def transfer_directory(self, directory):
-        command = [self.pyCommand, "fileTransfer.py", "send", "--dir", directory, "--host", self.host, "--port", str(self.port)]
-        result = subprocess.run(command)
-        return result.returncode == 0  # Check if command was successful
+        success = True
+        base_dir = os.path.basename(directory)
+        for root, _, files in os.walk(directory):
+            for file in files:
+                full_path = os.path.join(root, file)
+                if not send_file(full_path, directory, base_dir, self.host, self.port):
+                    success = False
+        return success
 
     def clear_files(self):
         self.file_listbox.delete(0, tk.END)
+        self.total_file_size = 0
+        self.total_file_count = 0
         self.update_items_label()
 
     def update_items_label(self):
-        num_items = self.file_listbox.size()
-        self.label_text.config(text=f"{num_items} items\n ")
+        num_items = self.total_file_count
+        if self.total_file_size:
+            self.label_text.config(text=f"{num_items} files ({self.report_total_file_size()})\n ")
+        else:
+            self.label_text.config(text=f"{num_items} files\n ")
+
+    def get_file_size(self, path):
+        total_size = 0
+        if os.path.isdir(path):
+            for dirpath, dirnames, filenames in os.walk(path):
+                for f in filenames:
+                    fp = os.path.join(dirpath, f)
+                    total_size += os.path.getsize(fp)
+                    self.total_file_count += 1
+        else:
+            total_size += os.path.getsize(path)
+            self.total_file_count += 1
+        return total_size
+
+    def report_total_file_size(self, size=None):
+        units = ['bytes', 'kB', 'MB', 'GB', 'TB']
+        unit_index = 0
+        if size is None:
+            size = self.total_file_size
+
+        while size >= 1024 and unit_index < len(units) - 1:
+            size /= 1024
+            unit_index += 1
+        return f"{size:.2f} {units[unit_index]}"
 
 
 def main():
@@ -184,7 +231,7 @@ def main():
     if not args.host:
         args.host = "127.0.0.1"
     if not args.port:
-        args.port = "1111"
+        args.port = 1111
 
     app = FileTransferGUI(args.host, args.port)
 

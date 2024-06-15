@@ -7,7 +7,10 @@ import datetime
 from DiscoveryConsts import *
 
 BUFFER_SIZE = 4096
-
+SENT_DATA = {
+    "bytesSent": 0,
+    "failed_files": 0
+             }
 
 def send_file(filename, root_dir, base_dir, host, port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -23,25 +26,36 @@ def send_file(filename, root_dir, base_dir, host, port):
         with open(filename, 'rb') as file:
             print(f'Sending {full_rel_path} to {host}:{port}')
             while chunk := file.read(BUFFER_SIZE):
-                s.sendall(chunk)
-            print(f'{full_rel_path} sent successfully')
+                try:
+                    s.sendall(chunk)
+                    SENT_DATA["bytesSent"] += len(chunk)
+                except Exception as e:
+                    print(f'Error sending {filename}: File may already exist on host machine')
+                    SENT_DATA["failed_files"] += 1
+                    return 0
+        print(f'{full_rel_path} sent successfully')
+        return 1
 
 
 def send_directory(directory, host, port):
+    success = 1
     base_dir = os.path.basename(directory)
     for root, _, files in os.walk(directory):
         for file in files:
             full_path = os.path.join(root, file)
-            send_file(full_path, directory, base_dir, host, port)
+            if not send_file(full_path, directory, base_dir, host, port):
+                success = 0
+    return success
 
 
-def receive_files(save_dir, port):
+def receive_files(save_dir, port, overwrite=False):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(('0.0.0.0', port))
         s.listen()
         print(f'Listening for incoming connections on port {port}')
         while True:
             conn, addr = s.accept()
+            file_exists = False
             with conn:
                 #print(f'Connection from {addr}')
                 # Receive the relative path length and relative path first
@@ -49,13 +63,23 @@ def receive_files(save_dir, port):
                 rel_path = conn.recv(rel_path_length).decode('utf-8')
                 file_path = os.path.join(save_dir, rel_path)
                 os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+                if os.path.exists(file_path):
+                    file_exists = True
+                    if not overwrite:
+                        print(f'File {rel_path} already exists and will not be overwritten.')
+                        conn.close()
+                        continue
+
+                statement = "Overwrote" if file_exists else "Received"
+
                 # Receive the file content
                 with open(file_path, 'wb') as file:
                     while chunk := conn.recv(BUFFER_SIZE):
                         if not chunk:
                             break
                         file.write(chunk)
-                    print(f'received {rel_path}, from {addr[0]} [{datetime.datetime.now()}]')
+                    print(f'{statement} {rel_path}, from {addr[0]} [{datetime.datetime.now()}]')
 
 
 def listen_for_discovery(port, host_port):
@@ -92,6 +116,7 @@ def main():
     parser.add_argument('--host', help='Host to connect to (required in send mode)')
     parser.add_argument('--port', type=int, required=True, help='Port to connect/listen on')
     parser.add_argument('--savedir', help='Directory to save the received files (required in receive mode)')
+    parser.add_argument('--overwrite', action='store_true', help='Overwrite existing files (optional, default is False)')
     args = parser.parse_args()
 
     if args.mode == 'send':
@@ -108,7 +133,7 @@ def main():
         if not args.savedir:
             parser.error('receive mode requires --savedir')
         start_discovery_listener(args.port, DiscoveryPort)
-        receive_files(args.savedir, args.port)
+        receive_files(args.savedir, args.port, args.overwrite)
 
 
 if __name__ == '__main__':
