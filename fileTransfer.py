@@ -27,6 +27,24 @@ RECV_DATA = {
     "canceled": False
     }
 
+
+def convert_path_to_os_style(filepath):
+    if os.path.sep == '/':
+        # Current system is Unix-like (Linux, macOS)
+        if '\\' in filepath:
+            return filepath.replace('\\', '/')
+        else:
+            return filepath
+    elif os.path.sep == '\\':
+        # Current system is Windows
+        if '/' in filepath:
+            return filepath.replace('/', '\\')
+        else:
+            return filepath
+    else:
+        raise OSError("Unsupported operating system")
+
+
 def send_file(filename, root_dir, base_dir, host, port):
     def failed_to_send():
         SENT_DATA["failed_files"] += 1
@@ -105,7 +123,10 @@ def receive_files(save_dir, port, overwrite=False):
                 with conn:
                     rel_path_length = struct.unpack('I', conn.recv(4))[0]
                     rel_path = conn.recv(rel_path_length).decode('utf-8')
-                    file_path = os.path.join(save_dir, rel_path)
+
+                    # Convert the received path to current machine's path style
+                    file_path = os.path.join(save_dir, convert_path_to_os_style(rel_path))
+
                     os.makedirs(os.path.dirname(file_path), exist_ok=True)
                     print(f'[{datetime.datetime.now()}]  Incoming file: {rel_path} from {addr[0]}')
                     RECV_DATA["in_progress"] = True
@@ -136,7 +157,7 @@ def receive_files(save_dir, port, overwrite=False):
                             print(f'[{datetime.datetime.now()}]  {statement} {rel_path}')
                             RECV_DATA["received_files"] += 1
                         except Exception as e:
-                            print(f'[{datetime.datetime.now()}] Error receiving {filename}: Conection lost')
+                            print(f'[{datetime.datetime.now()}] Error receiving {rel_path}: Connection lost')
                             RECV_DATA["failed_files"] += 1
                             continue
             RECV_DATA["in_progress"] = False
