@@ -1,1 +1,8 @@
-tkinterdnd2>=1.0.0
+argparse
+datetime
+netifaces
+python-tk
+socket
+tk
+tkinter
+tkinterdnd2
