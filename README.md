@@ -75,7 +75,6 @@ The Command-Line File Sender and Receiver tool allows you to send and receive fi
     python file_transfer.py send --dir /home/user/documents --host 192.168.1.2 --port 5001
     ```
 
-    ![File Sender Screenshot](path/to/your/screenshot1.png)
 
 2. **Receiving Files:**
 
@@ -91,7 +90,6 @@ The Command-Line File Sender and Receiver tool allows you to send and receive fi
     python file_transfer.py receive --savedir /home/user/downloads --port 5001
     ```
 
-    ![File Receiver Screenshot](path/to/your/screenshot2.png)
 
 ### Tool 2: File Transfer GUI
 
@@ -123,7 +121,7 @@ The File Transfer GUI provides a graphical interface for sending files or direct
     python file_transfer_gui.py --host 192.168.1.2 --port 5001
     ```
 
-    ![File Transfer GUI Screenshot](path/to/your/screenshot3.png)
+    ![File Transfer GUI Screenshot](path/to/your/screenshot1.png)
 
 2. **Using the GUI:**
 
