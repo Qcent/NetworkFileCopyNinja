@@ -68,11 +68,11 @@ class FileTransferGUI(TkinterDnD.Tk):
 
         if sys.platform.startswith('win'):
             # Windows
-            self.geometry("400x500")
+            self.geometry("420x505")
             self.pyCommand = "python"
         elif sys.platform.startswith('darwin'):
             # Mac OS
-            self.geometry("400x550")
+            self.geometry("420x550")
             self.pyCommand = "python3"
 
         self.failed_files = []  # List to store paths of failed files
@@ -102,7 +102,7 @@ class FileTransferGUI(TkinterDnD.Tk):
         self.file_listbox.pack(fill=tk.BOTH, expand=True, padx=5, pady=(0,0))
 
         # Label
-        self.label_text = tk.Label(self, text="0 files\n ", width=30, height=2, justify=tk.LEFT, anchor="w", font=("Helvetica", 10, "bold"))
+        self.label_text = tk.Label(self, text="0 files\n ", height=2, justify=tk.LEFT, anchor="w", font=("Helvetica", 10, "bold"))
         self.label_text.pack(side=tk.LEFT, padx=(10, 0), pady=0)
 
         # Send button
