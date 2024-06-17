@@ -8,11 +8,15 @@ import time
 
 from DiscoveryConsts import DiscoveryPort
 from stdoutputCapture import StdOutputCaptureThread
-from fileTransfer import receive_files, start_discovery_listener, RECV_DATA
+from fileTransfer import receive_files, report_data_size, start_discovery_listener, RECV_DATA
 
 
 APP_TITLE = "File Receiver GUI"
 recv_thread = None
+
+
+def is_capture():
+    return 1    # set this to enable/disable output capture (set to 0 for debug)
 
 
 def is_logging():
@@ -128,7 +132,7 @@ class FileReceiverGUI(tk.Tk):
         self.text_area.config(state=tk.DISABLED)
 
         # Stats Label
-        self.stats_text = tk.Label(self, text=f"{RECV_DATA['received_files']} files received, {RECV_DATA['failed_files']} failed, {RECV_DATA['rejected_files']} rejected\n{self.report_total_file_size(RECV_DATA['data_received'])} received", height=2, justify=tk.LEFT, anchor="w", font=("Helvetica", 10, "bold"))
+        self.stats_text = tk.Label(self, text=f"{RECV_DATA['received_files']} files received, {RECV_DATA['failed_files']} failed, {RECV_DATA['rejected_files']} rejected\n{report_data_size(RECV_DATA['data_received'])} received", height=2, justify=tk.LEFT, anchor="w", font=("Helvetica", 10, "bold"))
         self.stats_text.pack(side=tk.LEFT, padx=(10, 0), pady=0)
 
         # Cler button
@@ -189,7 +193,7 @@ class FileReceiverGUI(tk.Tk):
         self.text_area.config(state=tk.DISABLED)
 
     def update_stats_label(self):
-        self.stats_text.config(text=f"{RECV_DATA['received_files']} files received, {RECV_DATA['failed_files']} failed, {RECV_DATA['rejected_files']} rejected\n{self.report_total_file_size(RECV_DATA['data_received'])} received")
+        self.stats_text.config(text=f"{RECV_DATA['received_files']} files received, {RECV_DATA['failed_files']} failed, {RECV_DATA['rejected_files']} rejected\n{report_data_size(RECV_DATA['data_received'])} received")
 
     def auto_updater(self):
         if not RECV_DATA["in_progress"]:
@@ -214,6 +218,8 @@ class FileReceiverGUI(tk.Tk):
         self.text_area.see(tk.END)  # Scroll to the bottom
 
     def add_stdtext(self, source, text):
+        if text.isspace():
+            return
         # Add stdtext to the text area
         self.text_area.config(state=tk.NORMAL)
         self.text_area.insert(tk.END, text + "\n")
@@ -226,19 +232,6 @@ class FileReceiverGUI(tk.Tk):
         if self.log_file:
             self.log_file.write(f"{text}\n")
 
-    def report_total_file_size(self, size=None):
-        units = ['bytes', 'kB', 'MB', 'GB', 'TB']
-        unit_index = 0
-        if size is None:
-            size = self.total_file_size
-        if not size:
-            return f"0 {units[unit_index]}"
-
-        while size >= 1024 and unit_index < len(units) - 1:
-            size /= 1024
-            unit_index += 1
-        return f"{size:.2f} {units[unit_index]}"
-
     def on_closing(self):
         save_settings(self.savedir, self.port, RECV_DATA["overwrite"])
         self.destroy()
@@ -248,7 +241,7 @@ def main():
     log_file = None
     if is_logging():
         # Open a log file in append mode
-        log_file = open("receiver.log", "a")
+        log_file = open("receiver.log", "a", buffering=1)
         log_file.write("\n")
 
     parser = argparse.ArgumentParser(description=APP_TITLE)
@@ -269,8 +262,9 @@ def main():
     app = FileReceiverGUI(args.savedir, args.port, args.overwrite, log_file)
 
     # Start std out and std error capture
-    output_capture = StdOutputCaptureThread(app.add_stdtext)
-    output_capture.start()
+    if is_capture():
+        output_capture = StdOutputCaptureThread(app.add_stdtext)
+        output_capture.start()
 
     print(f'[{datetime.datetime.now()}] <<< NEW STARTUP >>>')
 
@@ -287,8 +281,9 @@ def main():
     recv_stop()
 
     # Stop the output capture thread
-    output_capture.stop()
-    output_capture.join()
+    if is_capture():
+        output_capture.stop()
+        output_capture.join()
 
     if is_logging():
         log_file.close()

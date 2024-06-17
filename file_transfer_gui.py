@@ -7,7 +7,7 @@ import datetime
 from tkinterdnd2 import DND_FILES, TkinterDnD
 
 from discoverHosts import discover_and_list_hosts
-from fileTransfer import SENT_DATA, send_file
+from fileTransfer import report_data_size, send_file, SENT_DATA
 from progressDialog import ProgressDialog
 
 APP_TITLE = "File Transfer GUI"
@@ -18,7 +18,7 @@ SelectedHost = {
 
 
 def is_logging():
-    return 0    # set this to enable/disable logging
+    return 1    # set this to enable/disable logging
 
 
 class HostListPopup(tk.Toplevel):
@@ -89,13 +89,13 @@ class FileTransferGUI(TkinterDnD.Tk):
 
         # Drop target
         self.drop_target = tk.Label(self, text="Drag and drop files or directories here", bg="lightgray", width=60, height=10)
-        self.drop_target.pack(fill=tk.BOTH, expand=True, padx=5, pady=(0,5))
+        self.drop_target.pack(fill=tk.BOTH, expand=True, padx=5, pady=(0, 5))
         self.drop_target.drop_target_register(DND_FILES)
         self.drop_target.dnd_bind('<<Drop>>', self.drop)
 
         # Listbox
         self.file_listbox = tk.Listbox(self, selectmode=tk.MULTIPLE, width=60, height=15)
-        self.file_listbox.pack(fill=tk.BOTH, expand=True, padx=5, pady=(0,0))
+        self.file_listbox.pack(fill=tk.BOTH, expand=True, padx=5, pady=(0, 0))
 
         # Label
         self.label_text = tk.Label(self, text="0 files\n ", height=2, justify=tk.LEFT, anchor="w", font=("Helvetica", 10, "bold"))
@@ -159,9 +159,9 @@ class FileTransferGUI(TkinterDnD.Tk):
         num_fails = SENT_DATA["failed_files"]
         num_success = num_items - num_fails
         if num_fails:
-            self.label_text.config(text=f"Failed to send {num_fails} files ({self.report_total_file_size(self.total_file_size-SENT_DATA['bytesSent'])})\nSuccessfully sent {num_success} files ({self.report_total_file_size(SENT_DATA['bytesSent'])})")
+            self.label_text.config(text=f"Failed to send {num_fails} files ({report_data_size(self.total_file_size-SENT_DATA['bytesSent'])})\nSuccessfully sent {num_success} files ({report_data_size(SENT_DATA['bytesSent'])})")
         else:
-            self.label_text.config(text=f"Successfully sent {num_success} files ({self.report_total_file_size(SENT_DATA['bytesSent'])})\n ")
+            self.label_text.config(text=f"Successfully sent {num_success} files ({report_data_size(SENT_DATA['bytesSent'])})\n ")
 
         # Clear the listbox after sending files
         self.file_listbox.delete(0, tk.END)
@@ -196,7 +196,7 @@ class FileTransferGUI(TkinterDnD.Tk):
     def update_items_label(self):
         num_items = self.total_file_count
         if self.total_file_size:
-            self.label_text.config(text=f"{num_items} files ({self.report_total_file_size()})\n ")
+            self.label_text.config(text=f"{num_items} files ({report_data_size(self.total_file_size)})\n ")
         else:
             self.label_text.config(text=f"{num_items} files\n ")
 
@@ -213,24 +213,12 @@ class FileTransferGUI(TkinterDnD.Tk):
             self.total_file_count += 1
         return total_size
 
-    def report_total_file_size(self, size=None):
-        units = ['bytes', 'kB', 'MB', 'GB', 'TB']
-        unit_index = 0
-        if size is None:
-            size = self.total_file_size
-        if not size:
-            return f"0 {units[unit_index]}"
-
-        while size >= 1024 and unit_index < len(units) - 1:
-            size /= 1024
-            unit_index += 1
-        return f"{size:.2f} {units[unit_index]}"
-
 
 def main():
+    logfile = None
     if is_logging():
         # Open a log file in append mode
-        log_file = open("send.log", "a")
+        log_file = open("send.log", "a", buffering=1)
 
         # Redirect stdout and stderr to the log file
         sys.stdout = log_file
