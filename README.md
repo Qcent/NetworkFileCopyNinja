@@ -20,25 +20,27 @@ NetworkFileCopyNinja is a Python-based tool designed to simplify file transfer b
    
 2. **Robust Transfer Mechanism**: Uses a reliable socket-based transfer when traditional protocols like SMB, FTP, or others fail to deliver.
 
-3. **Tool 1: Command-line Interface (CLI)**
+3. **Dynamic Host Discovery**
+   - Automatically discovers and lists available network hosts.
+   - Allows users to select hosts from a list for seamless file transfer.
+
+4. **Resume Failed Transfers**: Automatically resumes file transfers previously interrupted or failed, continuing from where the transfer left off.
+   
+5. **Tool 1: Command-line Interface (CLI)**
    - Allows sending files or directories via command-line arguments.
    - Discover network hosts via command-line arguments.
    - Supports specifying host IP, port, and file/directory paths directly from the terminal.
 
-4. **Tool 2: File Transfer GUI**
+6. **Tool 2: File Transfer GUI**
    - Interactive graphical user interface (GUI) built with Tkinter.
    - Enables browsing files/directories, drag-and-drop functionality, and sending selected items to discovered network hosts.
    - Displays transfer status, including successful transfers and any failed attempts.
    - Integrates logging functionality to log received file information and events (`send.log`).
 
-5. **Tool 3: File Receiver GUI**
+7. **Tool 3: File Receiver GUI**
    - GUI for receiving files over a network connection.
    - Allows users to select a save directory, toggle overwrite settings, and view received file statistics in real-time.
    - Integrates logging functionality to log received file information and events (`receiver.log`).
-
-6. **Dynamic Host Discovery**
-   - Automatically discovers and lists available network hosts.
-   - Allows users to select hosts from a list for seamless file transfer.
 
 ## Requirements
 
@@ -54,7 +56,7 @@ NetworkFileCopyNinja is a Python-based tool designed to simplify file transfer b
 To get started with NetworkFileCopyNinja, clone the repository and install the required dependencies.
 
 ```bash
-git clone https://github.com/yourusername/NetworkFileCopyNinja.git
+git clone https://github.com/Qcent/NetworkFileCopyNinja.git
 cd NetworkFileCopyNinja
 pip install -r requirements.txt
 ```
@@ -146,7 +148,7 @@ The File Transfer GUI provides a graphical interface for sending files or direct
 
 ### Tool 3: File Receiver GUI
 
-The File Receiver GUI (`file_receiver_gui.py`) allows users to receive files over a network connection. It provides a graphical interface to manage file reception settings, view received file statistics, and interact with the received file log.
+The File Receiver GUI allows users to receive files over a network connection. It provides a graphical interface to manage file reception settings, view received file statistics, and interact with the received file log.
 
 #### Usage
 
@@ -179,7 +181,7 @@ The File Receiver GUI (`file_receiver_gui.py`) allows users to receive files ove
 
 ## Contributing
 
-We welcome contributions to improve NetworkFileCopyNinja! Please fork the repository and submit a pull request with your changes.
+Contributions to help improve NetworkFileCopyNinja are very much welcome! Please fork the repository and submit a pull request with your changes.
 
 ## License
 
