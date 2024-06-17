@@ -1,5 +1,2 @@
-argparse
-datetime
 netifaces-plus
-tk
 tkinterdnd2
