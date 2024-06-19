@@ -117,7 +117,7 @@ def send_file(filename, root_dir, base_dir, host, port):
             print(f'[{datetime.datetime.now()}] Error sending {filename}: Could not establish connection : {e}')
             failed_to_send()
             return 0
-
+        file_data_sent = 0
         # Construct the relative path to maintain directory structure
         rel_path = os.path.relpath(filename, root_dir)
         full_rel_path = os.path.join(base_dir, rel_path)
@@ -140,7 +140,7 @@ def send_file(filename, root_dir, base_dir, host, port):
             if msg == ALL_GOOD_MSG:
                 pass
             elif msg == REJECTED_MSG:
-                print(f'[{datetime.datetime.now()}] Error sending {filename}: File Rejected')
+                print(f'[{datetime.datetime.now()}] Error sending {filename}({report_data_size(file_size)}): File Rejected')
                 failed_to_send()
                 return 0
             elif msg == REQ_CRC32_MSG:
@@ -155,7 +155,7 @@ def send_file(filename, root_dir, base_dir, host, port):
                 msg = s.recv(msg_length).decode('utf-8')
                 if msg == SAME_COPY_MSG:
                     # File already exists on host machine
-                    print(f'[{datetime.datetime.now()}] {full_rel_path} already exists on host machine')
+                    print(f'[{datetime.datetime.now()}] {full_rel_path}({report_data_size(file_size)}) already exists on host machine')
                     SENT_DATA["processed_files"] += 1
                     return 1
                 if msg == RESUME_MSG:
@@ -205,7 +205,7 @@ def send_file(filename, root_dir, base_dir, host, port):
                     failed_to_send()
                     return 0
         except Exception as e:
-            print(f'[{datetime.datetime.now()}] Error sending {filename}: {e}')
+            print(f'[{datetime.datetime.now()}] Error sending {filename}({report_data_size(file_size)}): {e}')
             failed_to_send()
             return 0
 
@@ -213,9 +213,9 @@ def send_file(filename, root_dir, base_dir, host, port):
         with open(filename, 'rb') as file:
             if resume_at_byte:
                 file.seek(resume_at_byte)
-                print(f'[{datetime.datetime.now()}] Resuming {full_rel_path} transfer to {host}:{port}')
+                print(f'[{datetime.datetime.now()}] Resuming {full_rel_path}({report_data_size(file_size)}) transfer to {host}:{port}')
             else:
-                print(f'[{datetime.datetime.now()}] Sending {full_rel_path} to {host}:{port}')
+                print(f'[{datetime.datetime.now()}] Sending {full_rel_path}({report_data_size(file_size)}) to {host}:{port}')
             while chunk := file.read(BUFFER_SIZE):
                 if SENT_DATA["canceled"]:
                     print(f'[{datetime.datetime.now()}] User canceled transfer')
@@ -225,13 +225,13 @@ def send_file(filename, root_dir, base_dir, host, port):
                 try:
                     s.sendall(chunk)
                     SENT_DATA["bytesSent"] += len(chunk)
-
+                    file_data_sent += len(chunk)
                 except Exception as e:
-                    print(f'Error sending {filename}: File may already exist on host machine')
+                    print(f'Error sending {filename}({report_data_size(file_size)}): {e}')
                     failed_to_send()
                     return 0
 
-        print(f'[{datetime.datetime.now()}] {full_rel_path} sent successfully')
+        print(f'[{datetime.datetime.now()}] {full_rel_path} sent successfully [{report_data_size(file_data_sent)}]')
         SENT_DATA["processed_files"] += 1
         return 1
 
@@ -377,6 +377,11 @@ def receive_files(save_dir, port, overwrite=False):
                         RECV_DATA["in_progress"] = False
                         conn.close()
 
+                    def reject_transfer():
+                        RECV_DATA["rejected_files"] += 1
+                        RECV_DATA["in_progress"] = False
+                        conn.close()
+
                     # Receive file name and size
                     rel_path_length = struct.unpack('I', conn.recv(4))[0]
                     rel_path = conn.recv(rel_path_length).decode('utf-8')
@@ -410,7 +415,7 @@ def receive_files(save_dir, port, overwrite=False):
                                     conn.send(struct.pack('I', len(SAME_COPY_MSG)))
                                     conn.send(SAME_COPY_MSG.encode())
                                     print(f'\t{rel_path} ({report_data_size(local_file_size)}) Checksum match, and file size match, no overwrite required.')
-                                    fail_transfer()
+                                    reject_transfer()
                                     continue
                                 else:
                                     resuming_transfer = True
@@ -439,7 +444,7 @@ def receive_files(save_dir, port, overwrite=False):
                                     print(f'[{datetime.datetime.now()}]  File {rel_path} ({report_data_size(local_file_size)}) will not be overwritten.')
                                     conn.send(struct.pack('I', len(REJECTED_MSG)))
                                     conn.send(REJECTED_MSG.encode())
-                                    fail_transfer()
+                                    reject_transfer()
                                     continue
                                 else:
                                     # Allow overwriting of file
@@ -454,6 +459,9 @@ def receive_files(save_dir, port, overwrite=False):
                                     file_version += 1
                                     new_file_path = append_to_filename(file_path, f"({file_version})")
                                 file_path = new_file_path
+                                rel_path = append_to_filename(rel_path, f"({file_version})")
+                                # file no longer exists at this path
+                                file_exists = False
                                 # OK the file transfer
                                 conn.send(struct.pack('I', len(ALL_GOOD_MSG)))
                                 conn.send(ALL_GOOD_MSG.encode())
