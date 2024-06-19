@@ -15,6 +15,7 @@ SENT_DATA = {
     "failed_files": 0,
     "processed_files": 0,
     "using_gui": False,
+    "gui_response": None,
     "canceled": False
     }
 
@@ -91,7 +92,6 @@ def append_to_filename(file_path, append_str):
     return os.path.join(directory, new_base + ext)
 
 
-
 def report_data_size(size):
     units = ['bytes', 'kB', 'MB', 'GB', 'TB']
     unit_index = 0
@@ -114,7 +114,7 @@ def send_file(filename, root_dir, base_dir, host, port):
         try:
             s.connect((host, port))
         except Exception as e:
-            print(f'[{datetime.datetime.now()}] Error sending {filename}: Could not establish connection')
+            print(f'[{datetime.datetime.now()}] Error sending {filename}: Could not establish connection : {e}')
             failed_to_send()
             return 0
 
@@ -132,31 +132,20 @@ def send_file(filename, root_dir, base_dir, host, port):
             s.send(struct.pack('I', file_size))
 
             # Wait for receiver message
+                #allgood    #crcReq     #prompt
             msg_length = struct.unpack('I', s.recv(4))[0]
             msg = s.recv(msg_length).decode('utf-8')
 
             # handle message from receiver
             if msg == ALL_GOOD_MSG:
                 pass
-            elif msg == RESUME_MSG:
-                # Resume file-check handshake
-
-                # Wait for 12 bytes containing dest file length or rejected message
-                twelve_byte_data = s.recv(12)
-
-                # Try to decode as REJECTED_MSG
-                try:
-                    decoded_msg = twelve_byte_data.decode('utf-8').rstrip('\0')
-                    if decoded_msg == REJECTED_MSG:
-                        print(f'[{datetime.datetime.now()}] Error sending {filename}: File Rejected')
-                        failed_to_send()
-                        return 0
-                except Exception as e:
-                    pass  # only exception should be un decodeable string in which case ...
-
-                # Unpack as integer (dest_file_size)
-                dest_file_size = struct.unpack('I', twelve_byte_data[:4])[0]
-
+            elif msg == REJECTED_MSG:
+                print(f'[{datetime.datetime.now()}] Error sending {filename}: File Rejected')
+                failed_to_send()
+                return 0
+            elif msg == REQ_CRC32_MSG:
+                # Receive file length
+                dest_file_size = struct.unpack('I', s.recv(4))[0]
                 # Calc crc32 at that length and send back
                 crc32 = calculate_partial_crc32(filename, dest_file_size)
                 s.send(struct.pack('I', crc32))
@@ -164,17 +153,59 @@ def send_file(filename, root_dir, base_dir, host, port):
                 # Wait for receiver message
                 msg_length = struct.unpack('I', s.recv(4))[0]
                 msg = s.recv(msg_length).decode('utf-8')
-
+                if msg == SAME_COPY_MSG:
+                    # File already exists on host machine
+                    print(f'[{datetime.datetime.now()}] {full_rel_path} already exists on host machine')
+                    SENT_DATA["processed_files"] += 1
+                    return 1
                 if msg == RESUME_MSG:
                     resume_at_byte = dest_file_size
+            elif msg == DIFF_FILE_MSG:
+                # Receive file length
+                dest_file_size = struct.unpack('I', s.recv(4))[0]
+                # Transfer requires user intervention
+                response = None
+                if not SENT_DATA["using_gui"]:
+                    response = input(f"  {full_rel_path}({report_data_size(dest_file_size)}) already exists on host machine.\n"
+                                     f"  {full_rel_path}({report_data_size(file_size)}) local copy.\n"
+                                     " What would you like to do? "
+                                     "'O' to Overwrite, 'B' to Keep Both, 'S' to Skip: ").strip().upper()
+                    while response not in ['O', 'B', 'S']:
+                        response = input("Invalid input. Please enter 'O' to Overwrite, 'B' to Keep Both, or 'S' to Skip: ").strip().upper()
+                else:
+                    # get the gui to prompt user and send the data back here somehow
+                    return 0
+                # Send messages
+                if response == 'O':
+                    # Send Request Overwrite Message
+                    s.send(struct.pack('I', len(REQ_OVERWRITE_MSG)))
+                    s.send(REQ_OVERWRITE_MSG.encode())
+                if response == 'B':
+                    # Send Keep Both Message
+                    s.send(struct.pack('I', len(KEEP_BOTH_MSG)))
+                    s.send(KEEP_BOTH_MSG.encode())
+                if response == 'S':
+                    # Send Skip Message
+                    s.send(struct.pack('I', len(SKIP_FILE_MSG)))
+                    s.send(SKIP_FILE_MSG.encode())
+                    failed_to_send()
+                    return 0
 
-            if msg == REJECTED_MSG:
-                print(f'[{datetime.datetime.now()}] Error sending {filename}: File Rejected')
-                failed_to_send()
-                return 0
-
+                # Wait for receiver message
+                msg_length = struct.unpack('I', s.recv(4))[0]
+                msg = s.recv(msg_length).decode('utf-8')
+                if msg == ALL_GOOD_MSG:
+                    pass
+                elif msg == REJECTED_MSG:
+                    print(f'[{datetime.datetime.now()}]  Error sending {full_rel_path}({report_data_size(file_size)}) : Rejected by host.')
+                    failed_to_send()
+                    return 0
+                else:
+                    print(f'[{datetime.datetime.now()}]  Error sending {full_rel_path}({report_data_size(file_size)}) : Host error.')
+                    failed_to_send()
+                    return 0
         except Exception as e:
-            print(f'[{datetime.datetime.now()}] Error sending {filename}: Connection lost')
+            print(f'[{datetime.datetime.now()}] Error sending {filename}: {e}')
             failed_to_send()
             return 0
 
@@ -388,10 +419,12 @@ def receive_files(save_dir, port, overwrite=False):
                                     print(f'\t{rel_path} ({report_data_size(local_file_size)}) Checksum match, resuming transfer.')
                         if different_files is True:
                             # Local file is larger or failed checksum match
-                            # Send different file same name message and wait for reply
+                            print(f'\t{rel_path} ({report_data_size(local_file_size)}) Checksum match failed.')
+                            # Send different file same name message then file_size and wait for reply
                             conn.send(struct.pack('I', len(DIFF_FILE_MSG)))
                             conn.send(DIFF_FILE_MSG.encode())
-                            print(f'\t{rel_path} ({report_data_size(local_file_size)}) Checksum match failed.')
+                            # Send local file size
+                            conn.send(struct.pack('I', local_file_size))
 
                             # Wait for sender response
                                 #skip   #overwrite  #keepboth
