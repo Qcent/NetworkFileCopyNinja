@@ -14,6 +14,7 @@ SENT_DATA = {
     "bytesSent": 0,
     "failed_files": 0,
     "processed_files": 0,
+    "using_gui": False,
     "canceled": False
     }
 
@@ -29,7 +30,13 @@ RECV_DATA = {
 
 ALL_GOOD_MSG = "0xB00B1E5"
 REJECTED_MSG = "0xD6EC7ED"
-RESUME_MSG   = "0x7E50BE"
+REQ_CRC32_MSG = "AC710271BE"
+RESUME_MSG = "0x7E50BE"
+SAME_COPY_MSG = "0x5ABEC097"
+DIFF_FILE_MSG = "0xD1FFF1113"
+REQ_OVERWRITE_MSG = "0x0B37717E"
+KEEP_BOTH_MSG = "0x4EE9B074"
+SKIP_FILE_MSG = "0x5419F111E"
 
 
 def calculate_crc32(file_path):
@@ -70,6 +77,19 @@ def convert_path_to_os_style(filepath):
             return filepath
     else:
         raise OSError("Unsupported operating system")
+
+
+def append_to_filename(file_path, append_str):
+    # Split the file path into directory, base name, and extension
+    directory, filename = os.path.split(file_path)
+    base, ext = os.path.splitext(filename)
+
+    # Append the base name
+    new_base = base + append_str
+
+    # Return the new file path
+    return os.path.join(directory, new_base + ext)
+
 
 
 def report_data_size(size):
@@ -196,7 +216,7 @@ def send_directory(directory, host, port):
     return success
 
 
-def receive_files(save_dir, port, overwrite=False):
+def receive_files_old(save_dir, port, overwrite=False):
     RECV_DATA["overwrite"] = overwrite
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(('0.0.0.0', port))
@@ -299,6 +319,140 @@ def receive_files(save_dir, port, overwrite=False):
                             RECV_DATA["received_files"] += 1
                         except Exception as e:
                             print(f'[{datetime.datetime.now()}] Error receiving {rel_path} [{report_data_size(bytes_written)} written]: Connection lost')
+                            fail_transfer()
+                            continue
+            RECV_DATA["in_progress"] = False
+
+
+def receive_files(save_dir, port, overwrite=False):
+    RECV_DATA["overwrite"] = overwrite
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(('0.0.0.0', port))
+        s.listen()
+        print(f'Listening for incoming connections on port {port}')
+
+        while True:
+            if RECV_DATA["canceled"]:
+                return
+            readable, _, _ = select.select([s], [], [], 1)  # 1 second timeout
+            if s in readable:
+                conn, addr = s.accept()
+                file_exists = False
+                different_files = True
+                resuming_transfer = False
+                with conn:
+                    def fail_transfer():
+                        RECV_DATA["failed_files"] += 1
+                        RECV_DATA["in_progress"] = False
+                        conn.close()
+
+                    # Receive file name and size
+                    rel_path_length = struct.unpack('I', conn.recv(4))[0]
+                    rel_path = conn.recv(rel_path_length).decode('utf-8')
+                    sender_file_size = struct.unpack('I', conn.recv(4))[0]
+                    # Convert the received path to current machine's path style
+                    file_path = os.path.join(save_dir, convert_path_to_os_style(rel_path))
+                    # Announce transfer request
+                    print(f'\n[{datetime.datetime.now()}]  Incoming file: {rel_path} ({report_data_size(sender_file_size)}) from {addr[0]}')
+
+                    # Check if file already exists
+                    if os.path.exists(file_path):
+                        file_exists = True
+                        local_file_size = os.path.getsize(file_path)
+                        print(f'\tFile {rel_path} ({report_data_size(local_file_size)}) exists locally.')
+
+                        if sender_file_size >= local_file_size:
+                            # Send Request crc32 Message
+                            conn.send(struct.pack('I', len(REQ_CRC32_MSG)))
+                            conn.send(REQ_CRC32_MSG.encode())
+                            # Send local file size
+                            conn.send(struct.pack('I', local_file_size))
+                            # Calc crc32 of local file
+                            crc32 = calculate_crc32(file_path)
+                            # Wait for crc32 from sender
+                            sender_crc32 = struct.unpack('I', conn.recv(4))[0]
+                            # Compare crc32s
+                            if sender_crc32 == crc32:
+                                different_files = False
+                                if sender_file_size == local_file_size:
+                                    # We already have this exact file
+                                    conn.send(struct.pack('I', len(SAME_COPY_MSG)))
+                                    conn.send(SAME_COPY_MSG.encode())
+                                    print(f'\t{rel_path} ({report_data_size(local_file_size)}) Checksum match, and file size match, no overwrite required.')
+                                    fail_transfer()
+                                    continue
+                                else:
+                                    resuming_transfer = True
+                                    conn.send(struct.pack('I', len(RESUME_MSG)))
+                                    conn.send(RESUME_MSG.encode())
+                                    print(f'\t{rel_path} ({report_data_size(local_file_size)}) Checksum match, resuming transfer.')
+                        if different_files is True:
+                            # Local file is larger or failed checksum match
+                            # Send different file same name message and wait for reply
+                            conn.send(struct.pack('I', len(DIFF_FILE_MSG)))
+                            conn.send(DIFF_FILE_MSG.encode())
+                            print(f'\t{rel_path} ({report_data_size(local_file_size)}) Checksum match failed.')
+
+                            # Wait for sender response
+                                #skip   #overwrite  #keepboth
+                            msg_length = struct.unpack('I', conn.recv(4))[0]
+                            msg = conn.recv(msg_length).decode('utf-8')
+                            if msg == SKIP_FILE_MSG:
+                                print(f'[{datetime.datetime.now()}]  Transfer of file {rel_path} ({report_data_size(local_file_size)}) skipped by sender')
+                                fail_transfer()
+                                continue
+                            elif msg == REQ_OVERWRITE_MSG:
+                                if not RECV_DATA["overwrite"]:
+                                    print(f'[{datetime.datetime.now()}]  File {rel_path} ({report_data_size(local_file_size)}) will not be overwritten.')
+                                    conn.send(struct.pack('I', len(REJECTED_MSG)))
+                                    conn.send(REJECTED_MSG.encode())
+                                    fail_transfer()
+                                    continue
+                                else:
+                                    # Allow overwriting of file
+                                    conn.send(struct.pack('I', len(ALL_GOOD_MSG)))
+                                    conn.send(ALL_GOOD_MSG.encode())
+                            elif msg == KEEP_BOTH_MSG:
+                                # Append ( file_version ) to the file name
+                                file_version = 1
+                                new_file_path = append_to_filename(file_path, f"({file_version})")
+                                # make sure file name is not in use
+                                while os.path.exists(new_file_path):
+                                    file_version += 1
+                                    new_file_path = append_to_filename(file_path, f"({file_version})")
+                                file_path = new_file_path
+                                # OK the file transfer
+                                conn.send(struct.pack('I', len(ALL_GOOD_MSG)))
+                                conn.send(ALL_GOOD_MSG.encode())
+
+                    else:
+                        conn.send(struct.pack('I', len(ALL_GOOD_MSG)))
+                        conn.send(ALL_GOOD_MSG.encode())
+
+                    # Create file path if necessary
+                    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+                    RECV_DATA["in_progress"] = True
+
+                    statement = "Appended" if resuming_transfer is True else ("Overwrote" if file_exists else "Received")
+
+                    with open(file_path, 'wb' if not resuming_transfer else 'ab') as file:
+                        bytes_written = 0
+                        try:
+                            while chunk := conn.recv(BUFFER_SIZE):
+                                if RECV_DATA["canceled"]:
+                                    print(f"[{datetime.datetime.now()}]  Cancellation requested during file transfer")
+                                    print(f'\t Cancelled {rel_path} [{report_data_size(bytes_written)} written]')
+                                    fail_transfer()
+                                    return 0
+                                if not chunk:
+                                    break
+                                file.write(chunk)
+                                RECV_DATA["data_received"] += len(chunk)
+                                bytes_written += len(chunk)
+                            print(f'[{datetime.datetime.now()}]  {statement} {rel_path} [{report_data_size(bytes_written)} written]')
+                            RECV_DATA["received_files"] += 1
+                        except Exception as e:
+                            print(f'[{datetime.datetime.now()}] Error receiving {rel_path} [{report_data_size(bytes_written)} written]: {e}')
                             fail_transfer()
                             continue
             RECV_DATA["in_progress"] = False
