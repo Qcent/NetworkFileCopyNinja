@@ -16,6 +16,40 @@ def report_data_size(size):
     return f"{size:.2f} {units[unit_index]}"
 
 
+class FileConflictDialog(tk.Toplevel):
+    def __init__(self, parent, file_path, remote_file_size, local_file_size):
+        super().__init__(parent)
+        self.parent = parent
+        self.user_choice = None
+
+        self.title("File Conflict")
+        #self.geometry("400x150")
+        self.resizable(False, False)
+
+        label_text = (f"{file_path} ({report_data_size(remote_file_size)}) already exists on host machine.\n"
+                      f"{file_path} ({report_data_size(local_file_size)}) local copy.\n"
+                      "\tWhat would you like to do? ")
+
+        label = tk.Label(self, text=label_text, wraplength=380, justify="left")
+        label.pack(pady=10, padx=30)
+
+        button_frame = tk.Frame(self)
+        button_frame.pack(pady=10)
+
+        overwrite_button = ttk.Button(button_frame, text="Overwrite", command=lambda: self.set_choice('O'))
+        overwrite_button.grid(row=0, column=0, padx=5)
+
+        keep_both_button = ttk.Button(button_frame, text="Keep Both", command=lambda: self.set_choice('B'))
+        keep_both_button.grid(row=0, column=1, padx=5)
+
+        skip_button = ttk.Button(button_frame, text="Skip", command=lambda: self.set_choice('S'))
+        skip_button.grid(row=0, column=2, padx=5)
+
+    def set_choice(self, choice):
+        self.user_choice = choice
+        self.destroy()
+
+
 class ProgressDialog(tk.Toplevel):
     def __init__(self, parent, filepaths, totalcount, totalsize, host, port, send_file, send_dir):
         super().__init__(parent)
@@ -59,6 +93,14 @@ class ProgressDialog(tk.Toplevel):
         self.update_progress()
 
     def update_progress(self):
+        if SENT_DATA["gui_response"] == "NEEDED":
+            (file_name, remote_size, local_size) = SENT_DATA["file_info"]
+            while SENT_DATA["gui_response"] not in ['O', 'B', 'S']:
+                user_prompt = FileConflictDialog(self, file_name, remote_size, local_size)
+                user_prompt.grab_set()  # Make the popup modal
+                user_prompt.wait_window()
+                SENT_DATA["gui_response"] = user_prompt.user_choice
+
         self.prog_metric1 = (SENT_DATA["processed_files"] / (self.filecount-(1* self.filecount > 1))) * 100
         self.prog_metric2 = (SENT_DATA["bytesSent"] / self.totalsize) * 100
         max_metric = max(self.prog_metric1, self.prog_metric2)

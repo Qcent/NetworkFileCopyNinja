@@ -4,6 +4,7 @@ import os
 import struct
 import threading
 import datetime
+import time
 import zlib
 import select
 
@@ -16,6 +17,7 @@ SENT_DATA = {
     "processed_files": 0,
     "using_gui": False,
     "gui_response": None,
+    "file_info": ("", 0, 0),
     "canceled": False
     }
 
@@ -173,8 +175,14 @@ def send_file(filename, root_dir, base_dir, host, port):
                     while response not in ['O', 'B', 'S']:
                         response = input("Invalid input. Please enter 'O' to Overwrite, 'B' to Keep Both, or 'S' to Skip: ").strip().upper()
                 else:
-                    # get the gui to prompt user and send the data back here somehow
-                    return 0
+                    # Set some data for the prompt to use
+                    SENT_DATA["file_info"] = (rel_path, dest_file_size, file_size)
+                    # flag for response
+                    SENT_DATA["gui_response"] = "NEEDED"
+                    # wait for response
+                    while SENT_DATA["gui_response"] not in ['O', 'B', 'S']:
+                        time.sleep(.3)
+                    response = SENT_DATA["gui_response"]
                 # Send messages
                 if response == 'O':
                     # Send Request Overwrite Message

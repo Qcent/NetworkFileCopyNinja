@@ -149,7 +149,7 @@ class FileTransferGUI(TkinterDnD.Tk):
         num_items = self.total_file_count
         self.failed_files.clear()
 
-        tranferWindow = ProgressDialog(None, selected_files, self.total_file_count, self.total_file_size, self.host, self.port, self.transfer_file, self.transfer_directory)
+        tranferWindow = ProgressDialog(self, selected_files, self.total_file_count, self.total_file_size, self.host, self.port, self.transfer_file, self.transfer_directory)
         tranferWindow.grab_set()  # Make the popup modal
         tranferWindow.wait_window()
 
@@ -237,6 +237,7 @@ def main():
         args.port = 1111
 
     app = FileTransferGUI(args.host, args.port)
+    SENT_DATA["using_gui"] = True
 
     def show_host_list():
         popup = HostListPopup(app, discover_and_list_hosts())
