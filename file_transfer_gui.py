@@ -25,7 +25,9 @@ class HostListPopup(tk.Toplevel):
     def __init__(self, parent, host_list):
         super().__init__(parent)
         self.title("Discovered Hosts")
-        self.geometry("300x150")
+        x = parent.winfo_x() + 90
+        y = parent.winfo_y() + 25
+        self.geometry(f"300x150+{x}+{y}")
 
         self.parent = parent
         self.host_list = host_list

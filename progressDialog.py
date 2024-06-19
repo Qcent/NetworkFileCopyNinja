@@ -20,6 +20,9 @@ class FileConflictDialog(tk.Toplevel):
     def __init__(self, parent, file_path, remote_file_size, local_file_size):
         super().__init__(parent)
         self.parent = parent
+        x = parent.winfo_x() + 100
+        y = parent.winfo_y() + 55
+
         self.user_choice = None
 
         self.title("File Conflict")
@@ -45,6 +48,8 @@ class FileConflictDialog(tk.Toplevel):
         skip_button = ttk.Button(button_frame, text="Skip", command=lambda: self.set_choice('S'))
         skip_button.grid(row=0, column=2, padx=5)
 
+        self.geometry(f"+{x}+{y}")
+
     def set_choice(self, choice):
         self.user_choice = choice
         self.destroy()
@@ -54,6 +59,8 @@ class ProgressDialog(tk.Toplevel):
     def __init__(self, parent, filepaths, totalcount, totalsize, host, port, send_file, send_dir):
         super().__init__(parent)
         self.parent = parent
+        x = parent.winfo_x() + 185
+        y = parent.winfo_y() + 185
         self.filepaths = filepaths
         self.totalsize = totalsize
         self.totalsize_readable = report_data_size(self.totalsize)
@@ -89,6 +96,8 @@ class ProgressDialog(tk.Toplevel):
 
         self.transfer_thread = Thread(target=self.perform_transfer)
         self.transfer_thread.start()
+
+        self.geometry(f"+{x}+{y}")
 
         self.update_progress()
 
