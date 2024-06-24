@@ -131,7 +131,7 @@ def send_file(filename, root_dir, base_dir, host, port):
             s.send(rel_path_bytes)
             # Send file size
             file_size = os.path.getsize(filename)
-            s.send(struct.pack('I', file_size))
+            s.send(struct.pack('Q', file_size))
 
             # Wait for receiver message
                 #allgood    #crcReq     #prompt
@@ -147,7 +147,7 @@ def send_file(filename, root_dir, base_dir, host, port):
                 return 0
             elif msg == REQ_CRC32_MSG:
                 # Receive file length
-                dest_file_size = struct.unpack('I', s.recv(4))[0]
+                dest_file_size = struct.unpack('Q', s.recv(4))[0]
                 # Calc crc32 at that length and send back
                 crc32 = calculate_partial_crc32(filename, dest_file_size)
                 s.send(struct.pack('I', crc32))
@@ -164,7 +164,7 @@ def send_file(filename, root_dir, base_dir, host, port):
                     resume_at_byte = dest_file_size
             elif msg == DIFF_FILE_MSG:
                 # Receive file length
-                dest_file_size = struct.unpack('I', s.recv(4))[0]
+                dest_file_size = struct.unpack('Q', s.recv(4))[0]
                 # Transfer requires user intervention
                 response = None
                 if not SENT_DATA["using_gui"]:
@@ -285,7 +285,7 @@ def receive_files(save_dir, port, overwrite=False):
                     # Receive file name and size
                     rel_path_length = struct.unpack('I', conn.recv(4))[0]
                     rel_path = conn.recv(rel_path_length).decode('utf-8')
-                    sender_file_size = struct.unpack('I', conn.recv(4))[0]
+                    sender_file_size = struct.unpack('Q', conn.recv(4))[0]
                     # Convert the received path to current machine's path style
                     file_path = os.path.join(save_dir, convert_path_to_os_style(rel_path))
                     # Announce transfer request
@@ -302,7 +302,7 @@ def receive_files(save_dir, port, overwrite=False):
                             conn.send(struct.pack('I', len(REQ_CRC32_MSG)))
                             conn.send(REQ_CRC32_MSG.encode())
                             # Send local file size
-                            conn.send(struct.pack('I', local_file_size))
+                            conn.send(struct.pack('Q', local_file_size))
                             # Calc crc32 of local file
                             crc32 = calculate_crc32(file_path)
                             # Wait for crc32 from sender
@@ -329,7 +329,7 @@ def receive_files(save_dir, port, overwrite=False):
                             conn.send(struct.pack('I', len(DIFF_FILE_MSG)))
                             conn.send(DIFF_FILE_MSG.encode())
                             # Send local file size
-                            conn.send(struct.pack('I', local_file_size))
+                            conn.send(struct.pack('Q', local_file_size))
 
                             # Wait for sender response
                                 #skip   #overwrite  #keepboth
