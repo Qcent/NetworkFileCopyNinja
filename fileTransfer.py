@@ -131,6 +131,8 @@ def send_file(filename, root_dir, base_dir, host, port):
             s.send(rel_path_bytes)
             # Send file size
             file_size = os.path.getsize(filename)
+            if not file_size:
+                file_size = 0  # prevent errors
             s.send(struct.pack('Q', file_size))
 
             # Wait for receiver message

@@ -110,8 +110,8 @@ class ProgressDialog(tk.Toplevel):
                 user_prompt.wait_window()
                 SENT_DATA["gui_response"] = user_prompt.user_choice
 
-        self.prog_metric1 = (SENT_DATA["processed_files"] / (self.filecount-(1* self.filecount > 1))) * 100
-        self.prog_metric2 = (SENT_DATA["bytesSent"] / self.totalsize) * 100
+        self.prog_metric1 = (SENT_DATA["processed_files"] / (self.filecount-(1* self.filecount > 1))) * 100 if self.filecount > 1 else 100
+        self.prog_metric2 = (SENT_DATA["bytesSent"] / self.totalsize) * 100 if self.totalsize > 0 else 100
         max_metric = max(self.prog_metric1, self.prog_metric2)
         self.progress = (self.prog_metric1 + self.prog_metric2)/2 if max_metric < 90 else max_metric
 
