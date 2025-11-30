@@ -164,6 +164,7 @@ cython_debug/
 # Project Specific
 .idea/
 hooks/
+oldversions/
 *.iml
 *.7z
 *.zip

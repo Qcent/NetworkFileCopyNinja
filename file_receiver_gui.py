@@ -8,10 +8,10 @@ import time
 
 from DiscoveryConsts import DiscoveryPort
 from stdoutputCapture import StdOutputCaptureThread
-from fileTransfer import receive_files, report_data_size, start_discovery_listener, RECV_DATA
+from fileTransfer import receive_files, report_data_size, start_discovery_listener, RECV_DATA, VERSION_NUM
 
 
-APP_TITLE = "File Receiver GUI"
+APP_TITLE = f"File Receiver GUI v{VERSION_NUM}"
 recv_thread = None
 
 
@@ -80,7 +80,6 @@ class FileReceiverGUI(tk.Tk):
         super().__init__()
         self.savedir = savedir
         self.port = port
-        #self.overwrite = overwrite
         RECV_DATA["overwrite"] = overwrite
         self.log_file = log_file
 
@@ -114,7 +113,11 @@ class FileReceiverGUI(tk.Tk):
         # Overwrite checkbox
         self.overwrite_var = tk.BooleanVar(value=RECV_DATA["overwrite"])
         self.overwrite_checkbox = tk.Checkbutton(self.button_frame, text="Overwrite", variable=self.overwrite_var, command=self.toggle_overwrite)
-        self.overwrite_checkbox.pack(side=tk.RIGHT, padx=(10, 0))
+        self.overwrite_checkbox.pack(side=tk.RIGHT, padx=(8, 0))
+
+        # Port button to the left of overwrite checkbox
+        self.port_button = tk.Button(self.button_frame, text=f"Port", command=self.edit_port)
+        self.port_button.pack(side=tk.RIGHT, padx=(10, 0))
 
         # Scrollable text area
         self.text_frame = tk.Frame(self)
@@ -135,9 +138,47 @@ class FileReceiverGUI(tk.Tk):
         self.stats_text = tk.Label(self, text=f"{RECV_DATA['received_files']} files received, {RECV_DATA['failed_files']} failed, {RECV_DATA['rejected_files']} rejected\n{report_data_size(RECV_DATA['data_received'])} received", height=2, justify=tk.LEFT, anchor="w", font=("Helvetica", 10, "bold"))
         self.stats_text.pack(side=tk.LEFT, padx=(10, 0), pady=0)
 
-        # Cler button
+        # Clear button
         self.clear_button = tk.Button(self, text="  Clear  ", command=self.clear_func)
         self.clear_button.pack(side=tk.RIGHT, padx=30, pady=5)
+
+        self.port_frame = None
+
+    def edit_port(self):
+        if self.port_frame:
+            # Already open
+            return
+
+        # Get absolute position of the port button
+        x = self.port_button.winfo_x()
+        y = self.port_button.winfo_y()
+        width = self.port_button.winfo_width()
+        height = self.port_button.winfo_height()
+
+        # Create the inline frame
+        self.port_frame = tk.Frame(self.button_frame, bd=1, relief="solid", bg="#f0f0f0")
+        self.port_frame.place(x=x, y=y, width=width, height=height)
+
+        # Entry inside the frame
+        port_var = tk.StringVar(value=str(self.port))
+        entry = tk.Entry(self.port_frame, textvariable=port_var, width=6, justify="center", font=("Helvetica", 10))
+        entry.pack(expand=True, fill=tk.BOTH)
+        entry.focus_set()
+        entry.select_range(0, tk.END)
+
+        def confirm(event=None):
+            val = port_var.get().strip()
+            if val.isdigit():
+                if int(val) != self.port:
+                    self.port = int(val)
+                    recv_stop()
+                    recv_start(self.savedir, self.port, self.overwrite_var)
+
+            self.port_frame.destroy()
+            self.port_frame = None
+
+        entry.bind("<Return>", confirm)
+        entry.bind("<FocusOut>", lambda e: confirm())
 
     def choose_savedir(self):
         old_path = self.savedir
@@ -245,7 +286,7 @@ def main():
         log_file.write("\n")
 
     parser = argparse.ArgumentParser(description=APP_TITLE)
-    parser.add_argument("--savedir", help="Host to connect to")
+    parser.add_argument("--savedir", help="Path where received files will be stored")
     parser.add_argument("--port", type=int, help="Port to connect to")
     parser.add_argument('--overwrite', action='store_true', help='Overwrite existing files (optional, default is False)')
     args = parser.parse_args()

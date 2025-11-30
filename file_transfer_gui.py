@@ -1,16 +1,17 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox
+from tkinterdnd2 import DND_FILES, TkinterDnD
 import argparse
 import os
 import sys
 import datetime
-from tkinterdnd2 import DND_FILES, TkinterDnD
+import threading
 
 from discoverHosts import discover_and_list_hosts
-from fileTransfer import report_data_size, send_file, SENT_DATA
+from fileTransfer import report_data_size, send_file, SENT_DATA,VERSION_NUM
 from progressDialog import ProgressDialog
 
-APP_TITLE = "File Transfer GUI"
+APP_TITLE = f"File Transfer GUI v{VERSION_NUM}"
 SelectedHost = {
     "port": None,
     "ip": None,
@@ -24,10 +25,11 @@ def is_logging():
 class HostListPopup(tk.Toplevel):
     def __init__(self, parent, host_list):
         super().__init__(parent)
+
         self.title("Discovered Hosts")
         x = parent.winfo_x() + 90
         y = parent.winfo_y() + 25
-        self.geometry(f"300x150+{x}+{y}")
+        self.geometry(f"320x220+{x}+{y}")
 
         self.parent = parent
         self.host_list = host_list
@@ -35,23 +37,92 @@ class HostListPopup(tk.Toplevel):
         self.create_widgets()
 
     def create_widgets(self):
-        self.listbox = tk.Listbox(self)
-        self.listbox.pack(fill=tk.BOTH, expand=True)
+        # Listbox frame
+        list_frame = tk.Frame(self)
+        list_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=(5, 0))
 
-        # Add hosts to the listbox
-        for host in self.host_list:
-            self.listbox.insert(tk.END, f"  {host[0]}   :   {host[1]}   :   {host[2]}")
+        self.listbox = tk.Listbox(list_frame, height=6, justify="center")
+        self.listbox.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
 
-        # Bind double click event to select host
-        self.listbox.bind("<Double-Button-1>", self.select_host)
+        scrollbar = tk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.listbox.yview)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.listbox.config(yscrollcommand=scrollbar.set)
 
-    def select_host(self, event):
-        index = self.listbox.curselection()[0]
-        selected_host = self.host_list[index]
+        if self.host_list:
+            # Add discovered hosts to the listbox
+            for host in self.host_list:
+                self.listbox.insert(tk.END, f"  {host[0]}   :   {host[1]}   :   {host[2]}")
+            # Bind double click to select host
+            self.listbox.bind("<Double-Button-1>", self.select_host)
+        else:
+            # No hosts found → greyed out message
+            self.listbox.insert(tk.END, "No Discovered Hosts")
+            self.listbox.itemconfig(0, fg="gray")  # set text color to gray
+            self.listbox.config(state="disabled")  # prevent selection
+
+        # Manual entry frame
+        entry_frame = tk.LabelFrame(self, text="Manual Host Entry")
+        entry_frame.pack(fill=tk.X, padx=5, pady=5)
+
+        # Host/IP
+        tk.Label(entry_frame, text="Host/IP:").grid(row=0, column=0, padx=3, pady=3, sticky="e")
+        self.manual_host_var = tk.StringVar()
+        self.manual_host_entry = tk.Entry(entry_frame, textvariable=self.manual_host_var, width=18)
+        self.manual_host_entry.grid(row=0, column=1, padx=3, pady=3, sticky="w")
+
+        # Port
+        tk.Label(entry_frame, text="Port:").grid(row=0, column=2, padx=3, pady=3, sticky="e")
+        self.manual_port_var = tk.StringVar(value="1111")
+        self.manual_port_entry = tk.Entry(entry_frame, textvariable=self.manual_port_var, width=7)
+        self.manual_port_entry.grid(row=0, column=3, padx=3, pady=3, sticky="w")
+
+        # Use/Connect button
+        self.manual_button = tk.Button(entry_frame, text="Use Manual Host", command=self.use_manual_host)
+        self.manual_button.grid(row=1, column=0, columnspan=4, pady=(5, 3))
+
+        # Allow Enter key to trigger manual host selection
+        self.manual_host_entry.bind("<Return>", lambda e: self.use_manual_host())
+        self.manual_port_entry.bind("<Return>", lambda e: self.use_manual_host())
+
+        self.config(cursor="")  # Change mouse cursor to normal from waiting
+        self.update_idletasks()
+
+    def select_host(self, event=None):
+        # If nothing selected, ignore
+        selection = self.listbox.curselection()
+        if not selection:
+            return
+        index = selection[0]
+        selected_host = self.host_list[index]  # (name, ip, port)
+
         self.parent.title(f"{APP_TITLE} --> {selected_host[0]}")
         global SelectedHost
         SelectedHost["ip"] = selected_host[1]
         SelectedHost["port"] = selected_host[2]
+        self.destroy()
+
+    def use_manual_host(self):
+        host = self.manual_host_var.get().strip()
+        port_str = self.manual_port_var.get().strip()
+
+        if not host:
+            # You can pop a messagebox here if you like
+            # messagebox.showwarning("Invalid host", "Please enter a host or IP address.")
+            return
+
+        try:
+            port = int(port_str)
+        except ValueError:
+            # messagebox.showwarning("Invalid port", "Port must be an integer.")
+            return
+
+        # Update global selection
+        global SelectedHost
+        SelectedHost["ip"] = host
+        SelectedHost["port"] = port
+
+        # Update parent title to show manual host
+        self.parent.title(f"{APP_TITLE} --> {host}:{port}")
         self.destroy()
 
 
@@ -66,7 +137,7 @@ class FileTransferGUI(TkinterDnD.Tk):
         if not host:
             self.title(APP_TITLE)
         else:
-            self.title(f"{APP_TITLE} --> {host}")
+            self.title(f"{APP_TITLE} --> {host}:{port}")
 
         if sys.platform.startswith('win'):  # Windows
             self.geometry("420x505")
@@ -242,9 +313,26 @@ def main():
     SENT_DATA["using_gui"] = True
 
     def show_host_list():
-        popup = HostListPopup(app, discover_and_list_hosts())
-        popup.grab_set()  # Make the popup modal
-        popup.wait_window()
+        def worker():
+            host_list = discover_and_list_hosts()  # run discovery in background
+            # Back on the main thread to update cursor and show popup
+            app.after(0, lambda: finish(host_list))
+
+        def finish(host_list):
+            app.config(cursor="")  # restore cursor
+            app.update_idletasks()
+            popup = HostListPopup(app, host_list)
+            popup.transient(app)
+            popup.lift()
+            popup.focus_force()
+            popup.grab_set()
+            popup.wait_window()
+
+        app.config(cursor="watch")
+        app.update_idletasks()
+        threading.Thread(target=worker, daemon=True).start()
+
+
 
     button = tk.Button(app.button_frame, text="Search Hosts", command=show_host_list)
     button.pack(side=tk.TOP, padx=(10, 0))
