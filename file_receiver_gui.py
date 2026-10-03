@@ -274,7 +274,7 @@ class FileReceiverGUI(tk.Tk):
             self.log_file.write(f"{text}\n")
 
     def on_closing(self):
-        save_settings(self.savedir, self.port, RECV_DATA["overwrite"])
+        save_settings(self.savedir, self.port, self.overwrite_var.get())
         self.destroy()
 
 
