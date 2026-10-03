@@ -1,11 +1,11 @@
 import socket
 import struct
 import threading
+import sys
 
 from DiscoveryConsts import *
+from tailscaleHosts import *
 from netInterfaces import GetNetInfo
-
-DEFAULT_TIMEOUT = 2
 
 
 def get_broadcast_address(ip, subnet_mask):
@@ -16,63 +16,96 @@ def get_broadcast_address(ip, subnet_mask):
     return broadcast_address
 
 
-def send_discovery_message(broadcast_address, port, message):
+def discover_lan_hosts(ip, subnet_mask):
+    broadcast_address = get_broadcast_address(ip, subnet_mask)
+
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-    sock.sendto(message.encode(), (broadcast_address, port))
-    sock.close()
+    sock.bind(("", 0))
 
+    #local_addr = sock.getsockname()
 
-def listen_for_responses(port, timeout=DEFAULT_TIMEOUT, lst=None):
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.bind(('', port+1))
-    sock.settimeout(timeout)
+    #print(f"Discovery socket: {local_addr}")
+    #print(f"Sending discovery to {broadcast_address}:{DiscoveryPort}")
+    print(f"Pinging LAN for hosts.")
+    
+    sock.sendto(
+        DiscoveryCode.encode(),
+        (broadcast_address, DiscoveryPort)
+    )
 
-    if lst is None:
-        print("Listening for responses...")
+    print("Waiting for responses...")
+
+    sock.settimeout(DEFAULT_TIMEOUT)
+
+    hosts = []
 
     try:
         while True:
             data, addr = sock.recvfrom(1024)
-            if lst is None:
-                print(f"Received response from {addr}: {data.decode()}")
-            else:
-                hostname, hostPort = data.decode().split(":")
-                lst.append((hostname, addr[0], hostPort))
+
+            message = data.decode(errors="replace")
+
+            print(f"Response from {addr}: {message}")
+
+            if ":" not in message:
+                continue
+
+            hostname, host_port = message.split(":", 1)
+
+            hosts.append(
+                (hostname, addr[0], host_port)
+            )
+
     except socket.timeout:
-        if lst is None:
-            print("Listening timed out.")
+        print("Discovery finished.")
+
+    finally:
+        sock.close()
+
+    return hosts
 
 
-def discover_hosts(ip, subnet_mask, port, message):
-    broadcast_address = get_broadcast_address(ip, subnet_mask)
-    print(f"Broadcast address: {broadcast_address}")
 
-    listener_thread = threading.Thread(target=listen_for_responses, args=(port,))
-    listener_thread.start()
+def discover_hosts_and_list(local_ip, subnet_mask, on_host_found):
+    broadcast_address = get_broadcast_address(local_ip, subnet_mask)
+    tailscale_peers = get_tailscale_peers()
+    
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    sock.bind(('', 0))
+    sock.settimeout(DEFAULT_TIMEOUT)
 
-    send_discovery_message(broadcast_address, port, message)
+    # Send discovery
+    if len(tailscale_peers):
+        for host in tailscale_peers:
+            ip = host['ip']
+            sock.sendto(DiscoveryCode.encode(), (ip, DiscoveryPort))
+    sock.sendto(DiscoveryCode.encode(), (broadcast_address, DiscoveryPort))
 
+    try:
+        while True:
+            try:
+                data, addr = sock.recvfrom(1024)
+                hostname, hostPort = data.decode().split(":")
+                host = (hostname, addr[0], hostPort)
+                on_host_found(host)
 
-def discover_and_list_hosts():
-    port = DiscoveryPort
-    message = DiscoveryCode
-    ip, subnet_mask = GetNetInfo()
-    broadcast_address = get_broadcast_address(ip, subnet_mask)
+            except ConnectionResetError as e:
+                #print("A probed talscale peer is not listening on the discovery port.")
+                continue
 
-    list_of_hosts = []
+    except socket.timeout:
+        pass
 
-    listener_thread = threading.Thread(target=listen_for_responses, args=(port, DEFAULT_TIMEOUT, list_of_hosts))
-    listener_thread.start()
-
-    send_discovery_message(broadcast_address, port, message)
-
-    listener_thread.join()
-    return list_of_hosts
+    finally:
+        sock.close()
 
 
 if __name__ == "__main__":
-    # Replace with your network details
-    my_ip, my_subnet_mask = GetNetInfo()
+    if "-ts" in sys.argv:
+        discover_tailscale_hosts()
+    else:
+        ip, subnet_mask = GetNetInfo()
+        discover_lan_hosts(ip, subnet_mask)
 
-    discover_hosts(my_ip, my_subnet_mask, DiscoveryPort, DiscoveryCode)

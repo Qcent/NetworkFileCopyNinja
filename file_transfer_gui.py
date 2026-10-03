@@ -7,7 +7,7 @@ import sys
 import datetime
 import threading
 
-from discoverHosts import discover_and_list_hosts
+from discoverHosts import *
 from fileTransfer import report_data_size, send_file, SENT_DATA,VERSION_NUM
 from progressDialog import ProgressDialog
 
@@ -86,6 +86,24 @@ class HostListPopup(tk.Toplevel):
 
         self.config(cursor="")  # Change mouse cursor to normal from waiting
         self.update_idletasks()
+
+    def add_host(self, host):
+        if not self.host_list:
+            self.listbox.config(state="normal")
+            print("deleting no hosts")
+            self.listbox.delete(0, tk.END)
+            
+        print("adding host to listbox")
+        self.host_list.append(host)
+        hostname, ip, port = host
+        host_txt = f"  {hostname}   :   {ip}   :   {port}"
+        print(f"Inserting {host_txt}")
+        self.listbox.insert(tk.END, f"  {host[0]}   :   {host[1]}   :   {host[2]}")
+
+    def discovery_finished(self):        
+        if self.host_list:
+            # Bind double click to select host
+            self.listbox.bind("<Double-Button-1>", self.select_host)
 
     def select_host(self, event=None):
         # If nothing selected, ignore
@@ -313,26 +331,37 @@ def main():
     SENT_DATA["using_gui"] = True
 
     def show_host_list():
-        def worker():
-            host_list = discover_and_list_hosts()  # run discovery in background
-            # Back on the main thread to update cursor and show popup
-            app.after(0, lambda: finish(host_list))
-
-        def finish(host_list):
-            app.config(cursor="")  # restore cursor
-            app.update_idletasks()
-            popup = HostListPopup(app, host_list)
-            popup.transient(app)
-            popup.lift()
-            popup.focus_force()
-            popup.grab_set()
-            popup.wait_window()
-
         app.config(cursor="watch")
         app.update_idletasks()
+
+        popup = HostListPopup(app, [])
+        popup.transient(app)
+        popup.lift()
+        popup.focus_force()
+        popup.grab_set()
+
+        def host_found(host):
+            print(f"hostFound: {host}")
+            app.after(0, lambda: popup.add_host(host))
+
+        def worker():
+            ip, subnet_mask = GetNetInfo()
+
+            discover_hosts_and_list(
+                ip,
+                subnet_mask,
+                host_found
+            )
+
+            app.after(0, discovery_finished)
+
+        def discovery_finished():
+            popup.discovery_finished()
+            app.config(cursor="")  # restore cursor
+            app.update_idletasks()
+
         threading.Thread(target=worker, daemon=True).start()
-
-
+        
 
     button = tk.Button(app.button_frame, text="Search Hosts", command=show_host_list)
     button.pack(side=tk.TOP, padx=(10, 0))
