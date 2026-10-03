@@ -15,7 +15,7 @@ def discover_tailscale_hosts():
 
     #local_addr = sock.getsockname()
     #print(f"Discovery socket: {local_addr}")
-    print(f"Pinging {len(hosts)} Tailscale peers.")
+    print(f"Pinging {len(ts_peers)} Tailscale peers.")
 
     for host in ts_peers:
         ip = host['ip']
